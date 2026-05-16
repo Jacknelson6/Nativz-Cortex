@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { uploadImageAsset } from '@/lib/calendar/storage-upload';
+import { getShareContextOrNull, resolveBoundIdentity } from '@/lib/share/identity';
+import { logShareAdminAction } from '@/lib/share/audit';
 
 /**
  * POST   /api/calendar/share/[token]/cover/[postId]
@@ -9,7 +11,7 @@ import { uploadImageAsset } from '@/lib/calendar/storage-upload';
  *
  * Lets a reviewer set (or clear) a custom cover photo on a video scheduled
  * post directly from the public share link. Mirrors the unauthenticated
- * token-as-auth pattern used by `caption/route.ts` — the share link itself
+ * token-as-auth pattern used by `caption/route.ts`, the share link itself
  * is the credential, no Supabase user required. Author name comes from the
  * client and is stamped onto the activity-rail entry so the team can see
  * who picked the cover.
@@ -19,7 +21,7 @@ import { uploadImageAsset } from '@/lib/calendar/storage-upload';
  * → publishPost → buildMediaContext at lib/posting/zernio.ts:494) and ships
  * it as the video thumbnail on Instagram / Facebook / LinkedIn. TikTok
  * ignores custom thumbnails (per the Zernio TikTok builder comment around
- * zernio.ts:733), so that leg silently falls back to TikTok's own cover —
+ * zernio.ts:733), so that leg silently falls back to TikTok's own cover , 
  * expected, not a bug.
  *
  * POST request: multipart/form-data with:
@@ -83,7 +85,7 @@ export async function POST(
   if (!gate.ok) return gate.res;
   const { link, reviewLinkId } = gate;
 
-  // Multipart parse. Same shape as replace-image — single `file` field plus
+  // Multipart parse. Same shape as replace-image, single `file` field plus
   // a textual `authorName` so the activity rail names the editor.
   const form = await req.formData().catch(() => null);
   const file = form?.get('file');
@@ -103,11 +105,11 @@ export async function POST(
     return NextResponse.json({ error: 'unsupported file type' }, { status: 415 });
   }
 
-  // The post needs to be a video for a custom cover to make sense — image
+  // The post needs to be a video for a custom cover to make sense, image
   // posts already use their asset as the visible media. Guard against the
   // UI accidentally pointing at an image carousel. The canonical "is this
   // an image post?" check (mirroring lib/calendar/resolve-media.ts) is
-  // `post_type in ('image','carousel')` — every other value (`video`,
+  // `post_type in ('image','carousel')`, every other value (`video`,
   // `reel`, NULL) flows through the videoUrl branch in buildMediaContext
   // and accepts a thumbnail. Earlier this only allowed literal 'video',
   // which 400'd for 335/370 of our video rows (almost all are `reel`).
@@ -131,7 +133,7 @@ export async function POST(
   // Reuse the image-asset uploader but namespace the cover key off the
   // post id so it doesn't collide with any image-post asset uploads (which
   // land under `drops/<dropId>/<postId>/<assetId>.ext`). Path collisions
-  // here would silently overwrite a published cover on a re-upload — the
+  // here would silently overwrite a published cover on a re-upload, the
   // assetId suffix gives us a fresh URL every time.
   const assetId = `cover-${randomUUID()}`;
   let newUrl: string;
@@ -182,10 +184,32 @@ export async function POST(
     .single();
   if (insErr || !commentRow) {
     // Roll the cover write back? The cover update already shipped, and the
-    // activity log is best-effort — leaving it stamped is the right call
+    // activity log is best-effort, leaving it stamped is the right call
     // (the cover IS the source of truth; the activity entry is a UX nicety).
     console.error('[cover] activity insert failed; cover saved anyway', insErr);
   }
+
+  // PRD 06 audit. Cover changes are open to any share-link viewer, but
+  // when an authenticated admin does it we log the action so the unified
+  // review modal can render "admin replaced cover" alongside the client
+  // self-serve case.
+  void (async () => {
+    const ctxForAudit = await getShareContextOrNull(token);
+    if (!ctxForAudit) return;
+    const { identity } = await resolveBoundIdentity(ctxForAudit);
+    if (!identity || (identity.role !== 'admin' && identity.role !== 'super_admin')) {
+      return;
+    }
+    await logShareAdminAction({
+      shareLinkId: ctxForAudit.linkId,
+      shareLinkKind: 'calendar',
+      actorUserId: identity.userId,
+      action: 'cover.change',
+      targetKind: 'cover',
+      targetId: postId,
+      payload: { new_url: newUrl, previous_url: previousCover },
+    });
+  })();
 
   return NextResponse.json({
     cover_image_url: newUrl,
@@ -204,7 +228,7 @@ export async function DELETE(
   if (!gate.ok) return gate.res;
   const { reviewLinkId } = gate;
 
-  // For DELETE we still want an authorName — pass via query string since
+  // For DELETE we still want an authorName, pass via query string since
   // the body is empty per HTTP semantics. The UI sends ?authorName=... .
   const url = new URL(req.url);
   const authorName = (url.searchParams.get('authorName') ?? '').trim();
@@ -247,6 +271,24 @@ export async function DELETE(
       'id, review_link_id, author_name, content, status, created_at, attachments, caption_before, caption_after, metadata',
     )
     .single();
+
+  void (async () => {
+    const ctxForAudit = await getShareContextOrNull(token);
+    if (!ctxForAudit) return;
+    const { identity } = await resolveBoundIdentity(ctxForAudit);
+    if (!identity || (identity.role !== 'admin' && identity.role !== 'super_admin')) {
+      return;
+    }
+    await logShareAdminAction({
+      shareLinkId: ctxForAudit.linkId,
+      shareLinkKind: 'calendar',
+      actorUserId: identity.userId,
+      action: 'cover.reset',
+      targetKind: 'cover',
+      targetId: postId,
+      payload: { previous_url: post.cover_image_url },
+    });
+  })();
 
   return NextResponse.json({
     cover_image_url: null,

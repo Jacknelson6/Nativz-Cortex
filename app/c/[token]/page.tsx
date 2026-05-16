@@ -11,7 +11,7 @@ import {
 } from 'react';
 import {
   AlertCircle, AlertTriangle, AtSign, BellRing, CalendarDays, CheckCircle, Clock,
-  Download, File as FileIcon, Film, ImageUp, List, Loader2, LogIn, MapPin, MessageSquare,
+  Download, Eye, EyeOff, File as FileIcon, Film, ImageUp, List, Loader2, LogIn, MapPin, MessageSquare,
   Paperclip, Pencil, Play, Plus, RefreshCw, RotateCcw, Send, Tag, Trash2, Type, Undo2,
   Upload, Users, VideoOff, X,
 } from 'lucide-react';
@@ -23,6 +23,17 @@ import type { DeliverableBalance } from '@/lib/deliverables/get-balances';
 import type { AddonSku } from '@/lib/deliverables/addon-skus';
 import { thumbUrl } from '@/lib/calendar/thumb-url';
 import { ShareTour, ShareTourLaunchButton, CALENDAR_SHARE_BEATS } from '@/components/share/share-tour';
+import {
+  ShareGatewayModal,
+  readGuestName,
+  clearGuestName,
+} from '@/components/share/gateway-modal';
+import { RoleChip } from '@/components/share/role-chip';
+import {
+  AttachmentChip,
+  CommentAttachmentTile,
+} from '@/components/share/comment-attachments';
+import { resolveCommentStyle } from '@/lib/share/comment-style';
 
 const CALENDAR_TOUR_STORAGE_KEY = 'cortex.share.calendarTourSeen';
 import { mergeCaptionAndHashtags } from '@/lib/scheduler/caption-hashtags';
@@ -55,6 +66,9 @@ interface SharedComment {
   id: string;
   review_link_id: string;
   author_name: string;
+  // PRD 05: server-enforced role tag. Drives the team/client/guest chip on
+  // every comment row. Falls back to 'guest' for pre-migration rows.
+  author_role: 'admin' | 'viewer' | 'guest';
   content: string;
   status: SharedCommentStatus;
   created_at: string;
@@ -91,7 +105,7 @@ interface SharedPost {
   cover_image_url: string | null;
   video_url: string | null;
   // 'video' (default, single video per post) or 'image' (1..N image assets in
-  // the assets[] array — single image when assets.length === 1, carousel when
+  // the assets[] array, single image when assets.length === 1, carousel when
   // length > 1). Image posts skip the Mux/<video> branches entirely.
   media_type: 'video' | 'image';
   assets: SharedAsset[];
@@ -99,7 +113,7 @@ interface SharedPost {
   collaborator_handles: string[];
   // For ad / "other" project types we surface an editable title instead of
   // a caption. `title` is the override (nullable), `filename_fallback` is
-  // the upload's original filename minus extension — used when the editor
+  // the upload's original filename minus extension, used when the editor
   // hasn't typed a title yet so the viewer always has something to show.
   title: string | null;
   filename_fallback: string | null;
@@ -176,7 +190,8 @@ export default function PublicCalendarSharePage({
       try {
         const storedName =
           typeof window !== 'undefined'
-            ? window.localStorage.getItem(`cortex_share_name_${token}`)?.trim() ?? ''
+            ? (readGuestName(token) ||
+                (window.localStorage.getItem(`cortex_share_name_${token}`)?.trim() ?? ''))
             : '';
         const qs = storedName ? `?as=${encodeURIComponent(storedName)}` : '';
         const res = await fetch(`/api/calendar/share/${token}${qs}`);
@@ -234,38 +249,158 @@ function SharedDropView({
   token: string;
   setData: (updater: (prev: SharedDrop | null) => SharedDrop | null) => void;
 }) {
-  const storageKey = `cortex_share_name_${token}`;
+  const legacyStorageKey = `cortex_share_name_${token}`;
   const [authorName, setAuthorName] = useState('');
-  const [nameModalOpen, setNameModalOpen] = useState(false);
-  const [pendingName, setPendingName] = useState('');
+  const [gatewayOpen, setGatewayOpen] = useState(false);
+  const [gatewayInfo, setGatewayInfo] = useState<{
+    agencyMismatch: boolean;
+    agencyAvailable: boolean;
+  }>({ agencyMismatch: false, agencyAvailable: false });
+  const [boundIdentity, setBoundIdentity] = useState<{
+    displayName: string;
+    role: 'admin' | 'super_admin' | 'viewer';
+  } | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [detailPostId, setDetailPostId] = useState<string | null>(null);
   const [approveAllOpen, setApproveAllOpen] = useState(false);
   const [approvingAll, setApprovingAll] = useState(false);
   const [downloadingAll, setDownloadingAll] = useState(false);
   const [addVideoOpen, setAddVideoOpen] = useState(false);
+  // PRD 06 §"View as client": admins flip this to preview the page
+  // without admin chrome. Local-only, does not change server identity.
+  const [viewAsClient, setViewAsClient] = useState(false);
+  const effectiveIsEditor = data.isEditor && !viewAsClient;
 
+  // PRD 02 §"Server resolution" + PRD 03 §"Guest persistence". On mount,
+  // ask the server who's logged in. If the session auto-binds to the
+  // share link's agency we skip the modal entirely; otherwise fall back
+  // to the persisted guest name (new key first, legacy key second so
+  // returning visitors don't get prompted again).
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const stored = window.localStorage.getItem(storageKey);
-    if (stored && stored.trim()) {
-      setAuthorName(stored.trim());
-    } else {
-      setNameModalOpen(true);
-    }
-  }, [storageKey]);
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/share/${token}/identity`);
+        const json = (await res.json().catch(() => null)) as
+          | {
+              state: 'auto_bound' | 'gateway' | 'expired' | 'archived' | 'not_found';
+              identity?: { displayName: string; role: 'admin' | 'super_admin' | 'viewer' };
+              sessionPresent?: boolean;
+              agencyMismatch?: boolean;
+              agencyAvailable?: boolean;
+            }
+          | null;
+        if (cancelled || !json) return;
 
-  function saveName(value: string) {
-    const trimmed = value.trim();
-    if (!trimmed) {
-      toast.error('Please enter your name');
-      return;
+        if (json.state === 'auto_bound' && json.identity) {
+          setAuthorName(json.identity.displayName);
+          setBoundIdentity({
+            displayName: json.identity.displayName,
+            role: json.identity.role,
+          });
+          setGatewayOpen(false);
+          return;
+        }
+
+        if (json.state === 'gateway') {
+          const guest =
+            readGuestName(token) ||
+            (typeof window !== 'undefined'
+              ? window.localStorage.getItem(legacyStorageKey)?.trim() ?? ''
+              : '');
+          if (guest) {
+            setAuthorName(guest);
+            setGatewayOpen(false);
+          } else {
+            setGatewayOpen(true);
+          }
+          setGatewayInfo({
+            agencyMismatch: !!json.agencyMismatch,
+            agencyAvailable: !!json.agencyAvailable,
+          });
+          return;
+        }
+      } catch {
+        // Identity probe failure is non-fatal; legacy guest name (if any)
+        // still works, and the share data fetch will surface terminal
+        // states. Fall through to the legacy guest-name read so we don't
+        // strand a returning visitor at a blank screen.
+        if (typeof window !== 'undefined') {
+          const guest =
+            readGuestName(token) ||
+            window.localStorage.getItem(legacyStorageKey)?.trim() ||
+            '';
+          if (guest) {
+            setAuthorName(guest);
+            setGatewayOpen(false);
+          } else {
+            setGatewayOpen(true);
+          }
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, legacyStorageKey]);
+
+  // Re-runs the identity probe after a successful login. Lifted out so
+  // the gateway's onLoggedIn can refresh the bound identity + role chip
+  // without duplicating the probe wiring.
+  async function reprobeIdentity() {
+    try {
+      const res = await fetch(`/api/share/${token}/identity`);
+      const json = (await res.json().catch(() => null)) as
+        | {
+            state: 'auto_bound' | 'gateway' | 'expired' | 'archived' | 'not_found';
+            identity?: { displayName: string; role: 'admin' | 'super_admin' | 'viewer' };
+            agencyMismatch?: boolean;
+            agencyAvailable?: boolean;
+          }
+        | null;
+      if (!json) return;
+      if (json.state === 'auto_bound' && json.identity) {
+        setAuthorName(json.identity.displayName);
+        setBoundIdentity({
+          displayName: json.identity.displayName,
+          role: json.identity.role,
+        });
+        return;
+      }
+      if (json.state === 'gateway') {
+        setBoundIdentity(null);
+        setGatewayInfo({
+          agencyMismatch: !!json.agencyMismatch,
+          agencyAvailable: !!json.agencyAvailable,
+        });
+      }
+    } catch {
+      /* probe failure is non-fatal */
     }
-    setAuthorName(trimmed);
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(storageKey, trimmed);
+  }
+
+  // "Switch identity" affordance. Bound sessions sign out via DELETE so
+  // a stale Cortex cookie doesn't auto-re-bind on the next reload; guest
+  // sessions clear the persisted name so the modal starts fresh. Both
+  // paths land on the gateway's "choose" view.
+  async function handleSwitchIdentity() {
+    if (boundIdentity) {
+      try {
+        await fetch(`/api/share/${token}/auth/login`, { method: 'DELETE' });
+      } catch {
+        /* ignore, modal will still show */
+      }
+      setBoundIdentity(null);
     }
-    setNameModalOpen(false);
+    clearGuestName(token);
+    try {
+      window.localStorage.removeItem(legacyStorageKey);
+    } catch {
+      /* ignore */
+    }
+    setAuthorName('');
+    await reprobeIdentity();
+    setGatewayOpen(true);
   }
 
   // Show unscheduled posts at the top, then chronological by scheduled_at
@@ -333,8 +468,7 @@ function SharedDropView({
   // and the documented allApproved race only fires once at the end.
   async function approveAll() {
     if (!authorName.trim()) {
-      setPendingName(authorName);
-      setNameModalOpen(true);
+      setGatewayOpen(true);
       return;
     }
     const targets = data.posts.filter((p) => latestReview(p.comments) !== 'approved');
@@ -587,7 +721,7 @@ function SharedDropView({
               p.id === postId
                 ? {
                     ...p,
-                    // For Mux uploads we don't have a playback URL yet — clear
+                    // For Mux uploads we don't have a playback URL yet, clear
                     // video_url so the UI shows a "processing" state until the
                     // ready webhook lands. For legacy uploads (revised_video_url
                     // is the actual URL) we still populate video_url.
@@ -605,7 +739,7 @@ function SharedDropView({
     );
   }
 
-  // Editor-only "remove from calendar" — strips the post from this share
+  // Editor-only "remove from calendar", strips the post from this share
   // link's `included_post_ids` server-side, then optimistically drops it
   // from the in-memory list so the card disappears immediately. Reversible
   // from admin UI (we don't delete the underlying scheduled_post or
@@ -618,7 +752,7 @@ function SharedDropView({
 
   // Image-replace: swap the asset row's url + mime in-memory after the
   // server endpoint repoints content_drop_post_assets and busts the
-  // scheduler_media feed-normalized cache. Single-asset posts only — that's
+  // scheduler_media feed-normalized cache. Single-asset posts only, that's
   // the only case the Replace UI exposes today (carousels need a per-frame
   // selector). Width/height clear so any consumer that branches on them
   // doesn't render the OLD aspect ratio against the NEW image.
@@ -696,8 +830,10 @@ function SharedDropView({
     try {
       const storedName =
         typeof window !== 'undefined'
-          ? window.localStorage.getItem(storageKey)?.trim() ?? ''
-          : '';
+          ? (readGuestName(token) ||
+              window.localStorage.getItem(legacyStorageKey)?.trim() ||
+              authorName.trim())
+          : authorName.trim();
       const qs = storedName ? `?as=${encodeURIComponent(storedName)}` : '';
       const res = await fetch(`/api/calendar/share/${token}${qs}`);
       const json = await readJsonSafe(res);
@@ -833,6 +969,28 @@ function SharedDropView({
                   <span className="sm:hidden">Sign in</span>
                 </a>
               )}
+              {data.isEditor && (
+                <button
+                  type="button"
+                  onClick={() => setViewAsClient((v) => !v)}
+                  className={`inline-flex items-center gap-1.5 rounded-[var(--nz-btn-radius)] border px-3.5 py-2 text-sm font-medium transition-all ${
+                    viewAsClient
+                      ? 'border-accent-text/50 bg-accent-surface/40 text-accent-text hover:bg-accent-surface/60'
+                      : 'border-nativz-border bg-transparent text-text-secondary hover:bg-surface-hover hover:text-text-primary'
+                  }`}
+                  title={
+                    viewAsClient
+                      ? 'Switch back to team view'
+                      : 'Preview the page as a brand reviewer would see it'
+                  }
+                  aria-pressed={viewAsClient}
+                >
+                  {viewAsClient ? <EyeOff size={14} /> : <Eye size={14} />}
+                  <span className="hidden sm:inline">
+                    {viewAsClient ? 'Team view' : 'View as client'}
+                  </span>
+                </button>
+              )}
               {total > 0 && (
                 <ShareTourLaunchButton storageKey={CALENDAR_TOUR_STORAGE_KEY} />
               )}
@@ -863,8 +1021,7 @@ function SharedDropView({
                   data-tour="cal-approve-all"
                   onClick={() => {
                     if (!authorName.trim()) {
-                      setPendingName(authorName);
-                      setNameModalOpen(true);
+                      setGatewayOpen(true);
                       return;
                     }
                     setApproveAllOpen(true);
@@ -888,14 +1045,16 @@ function SharedDropView({
               {authorName && (
                 <button
                   type="button"
-                  onClick={() => {
-                    setPendingName(authorName);
-                    setNameModalOpen(true);
-                  }}
+                  onClick={() => void handleSwitchIdentity()}
                   className="rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-3.5 py-2 text-sm font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary"
-                  title="Change name"
+                  title={boundIdentity ? 'Sign out and switch' : 'Change name'}
                 >
                   {authorName}
+                  {boundIdentity ? (
+                    <span className="ml-1.5 text-[10px] uppercase tracking-wider text-text-muted">
+                      {boundIdentity.role === 'viewer' ? 'client' : 'team'}
+                    </span>
+                  ) : null}
                 </button>
               )}
               <div className="inline-flex overflow-hidden rounded-[var(--nz-btn-radius)] border border-nativz-border">
@@ -931,7 +1090,7 @@ function SharedDropView({
               <CheckCircle size={14} /> {approvedCount} approved
             </span>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-status-warning/12 px-2.5 py-1 text-status-warning">
-              <AlertTriangle size={14} /> {changesCount} changes requested
+              <AlertTriangle size={14} /> {changesCount} {changesCount === 1 ? 'revision' : 'revisions'}
             </span>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-hover px-2.5 py-1 text-text-muted">
               <Clock size={14} /> link expires {expiresLabel}
@@ -949,7 +1108,7 @@ function SharedDropView({
                 index={idx + 1}
                 post={post}
                 projectType={data.projectType}
-                isEditor={data.isEditor}
+                isEditor={effectiveIsEditor}
                 defaultPostTime={data.drop.default_post_time}
                 token={token}
                 authorName={authorName}
@@ -967,8 +1126,7 @@ function SharedDropView({
                 onRemoveFromCalendar={() => removePostFromCalendar(post.id)}
                 onTitleUpdated={(title) => updatePostTitle(post.id, title)}
                 requireName={() => {
-                  setPendingName(authorName);
-                  setNameModalOpen(true);
+                  setGatewayOpen(true);
                 }}
               />
             ))}
@@ -983,8 +1141,7 @@ function SharedDropView({
             onSelect={(p) => setDetailPostId(p.id)}
             onScheduleUpdated={updatePostScheduledAt}
             requireName={() => {
-              setPendingName(authorName);
-              setNameModalOpen(true);
+              setGatewayOpen(true);
             }}
           />
         )}
@@ -993,7 +1150,7 @@ function SharedDropView({
             Mux upload + AI caption + schedule modal. Sits below the list /
             calendar so it reads as "add another to this batch" rather than
             attaching to any one post. */}
-        {data.isEditor && (
+        {effectiveIsEditor && (
           <div className="mx-auto mt-4 flex max-w-6xl justify-center sm:mt-6">
             <button
               type="button"
@@ -1021,53 +1178,38 @@ function SharedDropView({
         />
       )}
 
-      <Dialog
-        open={nameModalOpen}
-        onClose={() => {
-          if (authorName.trim()) {
-            setNameModalOpen(false);
-          } else {
-            toast.error('Please enter your name to continue');
+      <ShareGatewayModal
+        open={gatewayOpen}
+        token={token}
+        agencyMismatch={gatewayInfo.agencyMismatch}
+        agencyAvailable={gatewayInfo.agencyAvailable}
+        defaultGuestName={authorName}
+        onLoggedIn={async () => {
+          // Cookie is set; re-run identity probe so we pick up the
+          // bound display name + role and skip the modal going forward.
+          await reprobeIdentity();
+          setGatewayOpen(false);
+          await refetch();
+        }}
+        onGuestNamed={(name) => {
+          setAuthorName(name);
+          // PRD 03 §"Persistence": stash under the legacy key too so the
+          // outer ?as= read on a hard reload finds it without a second
+          // identity round-trip. Safe no-op if storage is blocked.
+          try {
+            window.localStorage.setItem(legacyStorageKey, name);
+          } catch {
+            /* ignore */
           }
+          setGatewayOpen(false);
         }}
-        onCancel={(e) => {
-          if (!authorName.trim()) e.preventDefault();
-        }}
-        title=""
-        maxWidth="sm"
-      >
-        <div className="space-y-3">
-          <h2 className="font-display text-lg font-semibold tracking-tight text-text-primary">Welcome</h2>
-          <p className="text-sm text-text-secondary">
-            Tell us who&apos;s reviewing so your feedback is attributed correctly.
-          </p>
-          <input
-            value={pendingName}
-            onChange={(e) => setPendingName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') saveName(pendingName);
-            }}
-            placeholder="Your name"
-            autoFocus
-            className="w-full rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-base text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent sm:text-sm"
-          />
-          <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={() => saveName(pendingName)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-accent-contrast transition-opacity hover:opacity-90"
-            >
-              Continue
-            </button>
-          </div>
-        </div>
-      </Dialog>
+      />
 
       <PostDetailModal
         post={detailPostId ? sortedPosts.find((p) => p.id === detailPostId) ?? null : null}
         index={detailPostId ? sortedPosts.findIndex((p) => p.id === detailPostId) + 1 : 0}
         projectType={data.projectType}
-        isEditor={data.isEditor}
+        isEditor={effectiveIsEditor}
         defaultPostTime={data.drop.default_post_time}
         token={token}
         authorName={authorName}
@@ -1083,10 +1225,7 @@ function SharedDropView({
         onRemoveFromCalendar={removePostFromCalendar}
         onTitleUpdated={updatePostTitle}
         onClose={() => setDetailPostId(null)}
-        requireName={() => {
-          setPendingName(authorName);
-          setNameModalOpen(true);
-        }}
+        requireName={() => setGatewayOpen(true)}
       />
 
       {data.isEditor && (
@@ -1119,7 +1258,7 @@ function SharedDropView({
       />
 
       <ShareTour
-        enabled={!nameModalOpen && data.posts.length > 0}
+        enabled={!gatewayOpen && data.posts.length > 0}
         beats={CALENDAR_SHARE_BEATS}
         storageKey={CALENDAR_TOUR_STORAGE_KEY}
       />
@@ -1283,7 +1422,7 @@ function ShareHeaderLogo() {
 function latestReview(comments: SharedComment[]): ReviewStatus | null {
   // Walk newest → oldest and return the first "live" review signal. A
   // changes_requested row that's been marked Revised (metadata.resolved)
-  // is no longer live — we skip past it so the pill can fall through to
+  // is no longer live, we skip past it so the pill can fall through to
   // an earlier approval, or disappear entirely if every revision has
   // been handled. This is what makes the header pill clear once an
   // editor checks Revised on the change-request thread.
@@ -1346,7 +1485,7 @@ function makePlayerHandle(el: PlayerLikeElement): PlayerHandle {
     seek: (seconds) => {
       try {
         el.currentTime = Math.max(0, seconds);
-        // Best-effort resume — promise rejects on autoplay policy violations,
+        // Best-effort resume, promise rejects on autoplay policy violations,
         // which are fine to swallow (the user clicked, so a play() following
         // a click should usually go through; if not, the seek already moved
         // the playhead and the user can hit play themselves).
@@ -1355,7 +1494,7 @@ function makePlayerHandle(el: PlayerLikeElement): PlayerHandle {
           (playResult as Promise<void>).catch(() => {});
         }
       } catch {
-        // Player may not be ready yet — silently no-op.
+        // Player may not be ready yet, silently no-op.
       }
     },
   };
@@ -1403,11 +1542,11 @@ function VideoSurface({
   // to 9:16 to preserve organic short-form behavior; ad-type viewers pass
   // 'aspect-square' (Social Ads) or 'aspect-video' (CTV Ads) instead.
   aspectClass?: string;
-  // Inline CSS aspect ratio used by Mux Player's style prop — Mux's element
+  // Inline CSS aspect ratio used by Mux Player's style prop, Mux's element
   // doesn't pick up Tailwind classes for sizing, so we drive it explicitly.
   aspectRatioStyle?: string;
   // Handed a handle when the underlying media element mounts, and `null`
-  // when it unmounts. Optional — most callers (calendar grid thumbs, lightbox)
+  // when it unmounts. Optional, most callers (calendar grid thumbs, lightbox)
   // don't need to seek into the player.
   onPlayerReady?: (handle: PlayerHandle | null) => void;
 }) {
@@ -1456,7 +1595,7 @@ function VideoSurface({
             <VideoOff className="mx-auto mb-2 text-white/80" size={26} />
             <p className="text-sm font-medium">Couldn&apos;t load this video</p>
             <p className="mt-0.5 text-[11px] text-white/70">
-              The connection dropped or the source is unavailable. Try again — usually it&apos;s a transient hiccup.
+              The connection dropped or the source is unavailable. Try again, usually it&apos;s a transient hiccup.
             </p>
             <button
               type="button"
@@ -1485,10 +1624,10 @@ function VideoSurface({
         accentColor="var(--accent)"
         poster={post.cover_image_url ?? undefined}
         // Aspect ratio is driven by project type (9:16 organic / 1:1 social
-        // ad / 16:9 CTV / 9:16 other) — see PostCard for the mapping.
+        // ad / 16:9 CTV / 9:16 other), see PostCard for the mapping.
         style={{ aspectRatio: aspectRatioStyle, maxHeight: 'inherit', width: '100%' }}
         className={className}
-        // Disable Mux's default end-screen + remote playback chrome — keeps
+        // Disable Mux's default end-screen + remote playback chrome, keeps
         // the share-link surface focused on review, not branded promo.
         metadata={{ player_name: 'cortex-share' }}
         onError={() => setErrored(true)}
@@ -1499,7 +1638,7 @@ function VideoSurface({
     // Layer the "processing" overlay on top of whatever poster we have for
     // the previous cut so the card never goes to a black void mid-replace.
     // Preference order:
-    //   1. Previous Mux thumbnail (most accurate — same frame the player
+    //   1. Previous Mux thumbnail (most accurate, same frame the player
     //      would show when the previous cut loaded). Image.mux.com is a
     //      public endpoint, no auth needed.
     //   2. cover_image_url from the original post (Drive cover).
@@ -1535,7 +1674,7 @@ function VideoSurface({
     // Legacy (pre-Mux) videos render through MuxPlayer with `src` so the
     // share-page chrome stays consistent (branded scrub bar, accent color,
     // unified error handling). MuxPlayer falls back to HTMLMediaElement
-    // playback when given a plain URL — no HLS / static rendition required.
+    // playback when given a plain URL, no HLS / static rendition required.
     return (
       <MuxPlayer
         ref={attachPlayer as never}
@@ -1678,7 +1817,7 @@ function MediaSurface({
   onPlayerReady?: (handle: PlayerHandle | null) => void;
 }) {
   if (post.media_type === 'image') {
-    // Image posts have no player — clear any previously-set handle so the
+    // Image posts have no player, clear any previously-set handle so the
     // composer's pin chip disappears for image-only cards.
     if (onPlayerReady) onPlayerReady(null);
     return <ImageCarouselSurface post={post} className={className} aspectClass={aspectClass} />;
@@ -1806,7 +1945,7 @@ function CalendarGrid({
   requireName: () => void;
 }) {
   const { weeks, monthLabel } = useMemo(() => buildCalendarWeeks(posts, drop), [posts, drop]);
-  // Lifted drag state — the cell renders a different border treatment when
+  // Lifted drag state, the cell renders a different border treatment when
   // it's the source vs an active drop target. Using state here (instead of
   // dataTransfer-only) gives us a hover-feedback frame across the grid.
   const [draggingPostId, setDraggingPostId] = useState<string | null>(null);
@@ -1830,17 +1969,17 @@ function CalendarGrid({
     const isPublished =
       post.status === 'published' || post.status === 'publishing' || post.status === 'partially_failed';
     if (isPublished) {
-      toast.error('Already published — date is locked');
+      toast.error('Already published, date is locked');
       return;
     }
-    // Preserve the post's original time-of-day on the new date — falling back
+    // Preserve the post's original time-of-day on the new date, falling back
     // to the drop's default_post_time when the post was previously
     // unscheduled (which can't actually drag from the calendar today, but
     // we keep the branch for future drag-from-list-into-calendar flows).
     const scheduledAt = buildScheduledAtForDate(target, post.scheduled_at, defaultPostTime);
     const targetIso = scheduledAt;
     setMoving(true);
-    // Optimistic local update — the parent's setData runs through
+    // Optimistic local update, the parent's setData runs through
     // onScheduleUpdated below, so we can roll back if the server rejects.
     const previousIso = post.scheduled_at;
     onScheduleUpdated(postId, new Date(targetIso).toISOString(), null);
@@ -1904,7 +2043,7 @@ function CalendarGrid({
                 setDragOverKey(null);
                 setDraggingPostId(null);
                 // Don't fire if the user dropped on the same day they
-                // started from — pointless and would still log a comment.
+                // started from, pointless and would still log a comment.
                 const post = postsById[postId];
                 if (post?.scheduled_at && isSameDay(new Date(post.scheduled_at), cell.date)) return;
                 void movePostToDate(postId, cell.date);
@@ -1913,7 +2052,7 @@ function CalendarGrid({
           );
         })}
       </div>
-      {/* Subtle hint so first-time users discover the affordance — only
+      {/* Subtle hint so first-time users discover the affordance, only
           renders when there's at least one schedulable post and an admin
           isn't already dragging. */}
       <p className="mt-3 px-1 text-[13px] text-text-muted sm:px-0 sm:text-sm">
@@ -2071,7 +2210,7 @@ function CalendarCell({
           )}
         </button>
       ) : (
-        // Empty cell — day number top-left in muted color. Drop target still
+        // Empty cell, day number top-left in muted color. Drop target still
         // active because the parent <div> handles dragover/drop.
         <span
           className={`absolute left-1.5 top-1.5 inline-flex h-6 min-w-[24px] items-center justify-center rounded-full px-1.5 text-[13px] sm:text-sm ${
@@ -2189,13 +2328,13 @@ function PostCard({
   }) => void;
   /**
    * Image-replace callback. Fires after the server endpoint repoints the
-   * `content_drop_post_assets` row at the new bytes — gives the parent the
+   * `content_drop_post_assets` row at the new bytes, gives the parent the
    * new url/mime so the asset re-renders without a full refetch. Single-asset
    * image posts only (carousels reject server-side).
    */
   onAssetReplaced: (next: { url: string; mime_type: string | null }) => void;
   /**
-   * Cover-photo set/clear callback. Video posts only — image posts have no
+   * Cover-photo set/clear callback. Video posts only, image posts have no
    * separate cover. `nextCover` is the new URL (POST) or null (DELETE).
    * The activity-rail comment row is `null` if the server's best-effort
    * activity insert failed; the cover update itself is still authoritative
@@ -2207,7 +2346,7 @@ function PostCard({
   requireName: () => void;
   /**
    * `inline` (default, list view): video stacked on top, captionBlock + history + composer below.
-   * `modal`: 2-column horizontal layout — video pinned left, scrollable body right. The post-detail
+   * `modal`: 2-column horizontal layout, video pinned left, scrollable body right. The post-detail
    *   dialog uses this so the video stays in view while the comments column scrolls independently.
    */
   layoutMode?: 'inline' | 'modal';
@@ -2247,15 +2386,15 @@ function PostCard({
   const [schedulePopoverOpen, setSchedulePopoverOpen] = useState(false);
   const [savingSchedule, setSavingSchedule] = useState(false);
   const [uploadingRevision, setUploadingRevision] = useState(false);
-  // 0–100 once we start the actual PUT to Mux. Lets the button render
-  // "Uploading… 42%" instead of a static spinner — important now that we
+  // 0, 100 once we start the actual PUT to Mux. Lets the button render
+  // "Uploading… 42%" instead of a static spinner, important now that we
   // bypass Vercel and the request can run for many minutes on a big file.
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const revisionInputRef = useRef<HTMLInputElement>(null);
   // Cover-photo upload state. Separate hidden input + ref from revisionInputRef
   // so the accept filter ("image/*") and progress copy stay independent of the
   // Replace-video / Replace-image upload that lives on the same card. Video
-  // posts only — the button is hidden for image posts (their visible asset is
+  // posts only, the button is hidden for image posts (their visible asset is
   // already the cover).
   const coverInputRef = useRef<HTMLInputElement>(null);
   const [uploadingCover, setUploadingCover] = useState(false);
@@ -2272,23 +2411,27 @@ function PostCard({
   const playerHandleRef = useRef<PlayerHandle | null>(null);
   const videoSectionRef = useRef<HTMLDivElement | null>(null);
   const [playerReady, setPlayerReady] = useState(false);
-  // Live playhead — ticks once per second while the player is mounted so the
+  // Live playhead, ticks once per second while the player is mounted so the
   // pin chip shows the same time the user sees on the player. The actual
   // value sent on submit is read fresh from the player handle (no rounding
   // drift from the displayed-vs-real time).
   const [livePlayheadSeconds, setLivePlayheadSeconds] = useState(0);
   // Whether the reviewer wants the next comment pinned to the playhead. On
-  // by default — the chip is visible from the moment the player is ready,
+  // by default, the chip is visible from the moment the player is ready,
   // and dismissing it (×) hides it for the current draft. Reset on submit.
   const [pinEnabled, setPinEnabled] = useState(true);
-  // Composer is collapsed by default — only Approve / Request change live at
+  // Composer is collapsed by default, only Approve / Request change live at
   // the bottom of the card. Clicking Request change expands the textarea so
   // the reviewer can write their note + hit Send. Keeps the resting state of
   // the card calm (most posts get one decision, not a long thread) and
   // matches the "talk only when you need to" Frame.io feel.
   const [composerExpanded, setComposerExpanded] = useState(false);
+  // PRD 01: composer defaults to plain feedback. Reviewer opts into "revision"
+  // explicitly when the note represents a change request, clears the legacy
+  // bug where every Send button submitted changes_requested.
+  const [markAsRevision, setMarkAsRevision] = useState(false);
   // Editor-only "remove from calendar" confirmation. We don't auto-fire the
-  // delete on click — destructive enough to warrant a one-step "are you
+  // delete on click, destructive enough to warrant a one-step "are you
   // sure?" so an accidental click can't pull a post the editor wanted to
   // keep. The action is reversible (the underlying scheduled_post + drop
   // video stay intact), but reversing it requires admin UI, so we slow
@@ -2309,7 +2452,7 @@ function PostCard({
       }
       toast.success('Removed from calendar');
       setRemoveOpen(false);
-      // Optimistic — the parent strips this card from the list, so the
+      // Optimistic, the parent strips this card from the list, so the
       // dialog unmounts naturally with the card.
       onRemoveFromCalendar();
     } catch (err) {
@@ -2319,7 +2462,7 @@ function PostCard({
   }
 
   // Tick the displayed playhead once per second while the player is ready.
-  // Light touch — we just read the cached time from the handle; no event
+  // Light touch, we just read the cached time from the handle; no event
   // wiring on the underlying <mux-player> needed.
   useEffect(() => {
     if (!playerReady) return;
@@ -2333,8 +2476,8 @@ function PostCard({
   }, [playerReady]);
 
   // Read the current playhead at the moment a comment is submitted. This is
-  // the value the user *meant* — wherever the timeline was when they hit
-  // Approve / Request change — not the snapshot from when they first
+  // the value the user *meant*, wherever the timeline was when they hit
+  // Approve / Request change, not the snapshot from when they first
   // focused the textarea.
   function readCurrentAnchorSeconds(): number | null {
     if (!pinEnabled || !playerReady) return null;
@@ -2347,7 +2490,7 @@ function PostCard({
     if (!handle) return;
     handle.seek(seconds);
     // Bring the player into view if the user scrolled past it inside the
-    // modal — the comment they clicked is below the fold most of the time.
+    // modal, the comment they clicked is below the fold most of the time.
     videoSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
   const isPublished =
@@ -2444,6 +2587,10 @@ function PostCard({
       toast.error('Please enter revision notes or attach a file');
       return;
     }
+    if (status === 'comment' && !commentText.trim() && pendingAttachments.length === 0) {
+      toast.error('Please enter a comment or attach a file');
+      return;
+    }
 
     // Optimistic flow: paint a temp comment into the parent immediately so
     // the approve / changes_requested chip flips state without waiting on
@@ -2464,6 +2611,11 @@ function PostCard({
       id: tempId,
       review_link_id: '',
       author_name: trimmedAuthor,
+      // Server resolves the real role from the session; optimistic row
+      // stays 'guest' so the chip doesn't pre-promote. RoleChip renders
+      // nothing for guest, so the only flicker is the chip popping in
+      // once the real row replaces the temp on success.
+      author_role: 'guest',
       content: resolvedContent,
       // Reflect the user's intent locally; the server may auto-upgrade
       // changes_requested → approved on its side, which we reconcile when
@@ -2479,16 +2631,21 @@ function PostCard({
     };
 
     onCommentAdded(tempComment);
-    // Reset composer immediately — the user already committed to the action,
+    // Reset composer immediately, the user already committed to the action,
     // and seeing the temp chip while the field is still full feels laggy.
     setCommentText('');
     setPendingAttachments([]);
     setPinEnabled(true);
     setComposerExpanded(false);
+    setMarkAsRevision(false);
     // Optimistic toast. The server may auto-upgrade changes_requested →
     // approved; we patch the toast in the success branch if that happens.
     const optimisticToastId = toast.success(
-      status === 'approved' ? 'Post approved' : 'Revision added',
+      status === 'approved'
+        ? 'Post approved'
+        : status === 'changes_requested'
+          ? 'Revision added'
+          : 'Comment added',
     );
 
     setSubmitting(true);
@@ -2512,7 +2669,7 @@ function PostCard({
       if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'Failed to submit');
       const savedComment = json.comment as SharedComment;
       // Swap the temp row for the real one. Two-step (remove → add) so the
-      // identity-by-id helpers stay simple — no need for an `upsertComment`.
+      // identity-by-id helpers stay simple, no need for an `upsertComment`.
       onCommentRemoved(tempId);
       onCommentAdded(savedComment);
     } catch (err) {
@@ -2571,7 +2728,7 @@ function PostCard({
       return;
     }
     if (isPublished) {
-      toast.error('Already published — date is locked');
+      toast.error('Already published, date is locked');
       return;
     }
     setSavingSchedule(true);
@@ -2659,7 +2816,7 @@ function PostCard({
       }
 
       onRevisionUploaded({
-        // No playback URL yet — Mux is processing. The UI will show a
+        // No playback URL yet, Mux is processing. The UI will show a
         // "Processing…" state until the share endpoint reflects the
         // playback id (next mount or refresh).
         revised_video_url: null,
@@ -2667,7 +2824,7 @@ function PostCard({
         revised_video_notify_pending: true,
         mux_status: 'processing',
       });
-      toast.success('Upload complete — Mux is processing the cut');
+      toast.success('Upload complete, Mux is processing the cut');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Upload failed');
     } finally {
@@ -2909,7 +3066,7 @@ function PostCard({
         )}
         {review === 'changes_requested' && (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-status-warning/12 px-3 py-1.5 text-sm font-medium text-status-warning ring-1 ring-status-warning/30">
-            <AlertTriangle size={13} /> Changes requested
+            <AlertTriangle size={13} /> Revision requested
           </span>
         )}
         {review === null && (
@@ -3051,17 +3208,17 @@ function PostCard({
     </div>
   );
 
-  // Video panel — both list-view cards and the post-detail modal use the
+  // Video panel, both list-view cards and the post-detail modal use the
   // same horizontal layout (video pinned left, scrollable column on the
   // right). The wrapper has no enforced min-height, so the column hugs
-  // the video's natural geometry — no letterboxing top/bottom. The Mux
+  // the video's natural geometry, no letterboxing top/bottom. The Mux
   // player has its own fullscreen control built in, so "make it full
   // size" doesn't need an explicit button here.
   // CSS aspect ratio used by the inner Mux player. Must mirror the Tailwind
   // aspect class on the wrapping div (see videoColAspect below) so the
   // player and its container agree on geometry.
   // Image posts always use 4:5 (Instagram feed max-vertical). Their cropped
-  // render is 1080×1350 — putting that inside a 9:16 container creates
+  // render is 1080×1350, putting that inside a 9:16 container creates
   // top/bottom pillarbox bars, which is what the customer was seeing.
   // Post-migration 302 both project types default to 9:16; the legacy
   // 16:9 (CTV) and 1:1 (social ad) branches were dropped along with the
@@ -3104,7 +3261,7 @@ function PostCard({
     />
   ) : null;
 
-  // Cover-photo hidden input — video posts only, separate from
+  // Cover-photo hidden input, video posts only, separate from
   // revisionInput so the accept filter stays "image/*" without colliding
   // with the Replace-video flow's "video/*" filter on the same card.
   const coverInput = !isImagePost ? (
@@ -3198,7 +3355,7 @@ function PostCard({
 
   const composerBlock = (
     <div className="border-t border-nativz-border bg-surface px-3 py-3 sm:px-4">
-      {/* Expanded composer — only renders when the reviewer is actively
+      {/* Expanded composer, only renders when the reviewer is actively
           drafting a "Request change" note. Default rest state hides this
           entirely so the column doesn't read as a wall of inputs the user
           must engage with before they can approve. */}
@@ -3207,14 +3364,14 @@ function PostCard({
           <textarea
             ref={(el) => {
               // Auto-focus on first expand so the cursor is already in place
-              // when the user opens the composer — no extra click required.
+              // when the user opens the composer, no extra click required.
               if (el && composerExpanded && document.activeElement !== el && !commentText) {
                 el.focus();
               }
             }}
             value={commentText}
             onChange={(e) => setCommentText(e.target.value)}
-            placeholder="Notes on the video (cuts, music, hook, etc.)"
+            placeholder="Add a comment, or toggle Mark as revision to request changes…"
             rows={3}
             className="w-full resize-none rounded-t-lg bg-transparent px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
             disabled={submitting}
@@ -3237,7 +3394,7 @@ function PostCard({
             onChange={(e) => uploadFiles(e.target.files)}
           />
 
-          {/* Action row inside the textbox — Attach + timestamp on the
+          {/* Action row inside the textbox, Attach + timestamp on the
               left, Send on the right. Mirrors the "compose pane bottom
               bar" pattern in Slack/Linear so reviewers don't have to hunt
               for the submit affordance. */}
@@ -3251,7 +3408,7 @@ function PostCard({
               {uploading ? <Loader2 size={13} className="animate-spin" /> : <Paperclip size={13} />}
               {uploading ? 'Uploading…' : 'Attach files'}
             </button>
-            {/* Live timestamp chip — tracks the current playhead so the
+            {/* Live timestamp chip, tracks the current playhead so the
                 pinned moment matches whatever the user is looking at when
                 they hit Send. Dismiss (×) opts out for the current draft;
                 the fallback button lets them opt back in. */}
@@ -3283,12 +3440,30 @@ function PostCard({
               )
             )}
             <div className="ml-auto flex items-center gap-1">
+              {/* PRD 01: revision toggle. Default is plain feedback ("comment");
+                  flipping promotes the submit to changes_requested. */}
+              <button
+                type="button"
+                onClick={() => setMarkAsRevision((v) => !v)}
+                disabled={submitting || uploading}
+                aria-pressed={markAsRevision}
+                title={markAsRevision ? 'Sending as revision request' : 'Send as feedback only'}
+                className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-all disabled:opacity-50 ${
+                  markAsRevision
+                    ? 'bg-status-warning/15 text-status-warning ring-1 ring-status-warning/40'
+                    : 'bg-transparent text-text-secondary hover:bg-surface-hover hover:text-text-primary'
+                }`}
+              >
+                <AlertTriangle size={13} />
+                {markAsRevision ? 'Revision' : 'Mark as revision'}
+              </button>
               <button
                 type="button"
                 onClick={() => {
                   setComposerExpanded(false);
                   setCommentText('');
                   setPendingAttachments([]);
+                  setMarkAsRevision(false);
                 }}
                 disabled={submitting || uploading}
                 className="inline-flex items-center gap-1.5 rounded-md bg-transparent px-2 py-1 text-xs font-medium text-text-muted transition-all hover:bg-surface-hover hover:text-text-secondary disabled:opacity-50"
@@ -3297,7 +3472,7 @@ function PostCard({
               </button>
               <button
                 type="button"
-                onClick={() => submit('changes_requested')}
+                onClick={() => submit(markAsRevision ? 'changes_requested' : 'comment')}
                 disabled={submitting || uploading || (!commentText.trim() && pendingAttachments.length === 0)}
                 className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-[color:var(--accent-contrast)] shadow-[var(--shadow-card)] transition-all hover:bg-accent-hover hover:shadow-[var(--shadow-card-hover)] active:scale-[0.98] disabled:opacity-50 disabled:hover:bg-accent"
               >
@@ -3309,7 +3484,7 @@ function PostCard({
         </div>
       )}
 
-      {/* Reviewer decisions — anchored to the bottom of the column so the
+      {/* Reviewer decisions, anchored to the bottom of the column so the
           two primary actions (Approve, Request change) are always at the
           same hand-position regardless of comment thread length. The
           editor-only Remove is split off behind ml-auto on sm+ and
@@ -3337,7 +3512,7 @@ function PostCard({
           </button>
         )}
         {/* Request change opens the composer rather than submitting
-            directly — submission only fires from the Send button inside
+            directly, submission only fires from the Send button inside
             the textbox, after the reviewer has actually written something. */}
         <button
           type="button"
@@ -3351,9 +3526,9 @@ function PostCard({
               : 'border-nativz-border bg-transparent text-text-secondary hover:bg-surface-hover hover:text-text-primary'
           }`}
         >
-          <MessageSquare size={14} /> Request change
+          <MessageSquare size={14} /> Add comment
         </button>
-        {/* Secondary cluster — Download (everyone), Replace (editor-only,
+        {/* Secondary cluster, Download (everyone), Replace (editor-only,
             single-asset posts), Remove (editor-only). On sm+ they collapse
             into a right-aligned icon row so they don't visually compete
             with the two primary CTAs; on mobile they expand to full-width
@@ -3410,10 +3585,14 @@ function PostCard({
           </button>
         )}
         {/* Cover photo: video posts only. Visible to both reviewers and
-            editors (per Item 4 of the PRD — covers are a brand-side
+            editors (per Item 4 of the PRD, covers are a brand-side
             decision, not a strategist-only one). Image posts already use
-            their asset as the visible thumbnail, so no cover affordance. */}
-        {!isImagePost && (
+            their asset as the visible thumbnail, so no cover affordance.
+            Hidden from anonymous visitors so the affordance only appears
+            after the visitor has identified themselves through the
+            gateway, otherwise clicking would just bounce to the name
+            prompt and feels like a dead end. */}
+        {!isImagePost && (isEditor || authorName.trim() !== '') && (
           <button
             type="button"
             onClick={() => {
@@ -3440,8 +3619,9 @@ function PostCard({
         )}
         {/* Reset cover only when a custom cover has been set. Falls back
             to the auto-first-frame thumbnail Mux + the ingest pipeline
-            stamped at upload time. */}
-        {!isImagePost && post.cover_image_url && (
+            stamped at upload time. Same identity gate as the edit button
+            above. */}
+        {!isImagePost && post.cover_image_url && (isEditor || authorName.trim() !== '') && (
           <button
             type="button"
             onClick={() => void clearCover()}
@@ -3473,14 +3653,14 @@ function PostCard({
         )}
       </div>
 
-      {/* Project-standard ConfirmDialog — same shell used by Delete client
+      {/* Project-standard ConfirmDialog, same shell used by Delete client
           and other destructive flows so the styling reads as native. The
           confirm path closes the dialog before firing so the auto-focused
           button can't fire twice; the parent handles the loading toast. */}
       <ConfirmDialog
         open={removeOpen}
         title="Remove from calendar?"
-        description="This post will disappear from the calendar the brand sees. The caption, comments, and underlying video stay safe — you can add it back from the admin calendar if you change your mind."
+        description="This post will disappear from the calendar the brand sees. The caption, comments, and underlying video stay safe, you can add it back from the admin calendar if you change your mind."
         confirmLabel={removing ? 'Removing…' : 'Remove'}
         variant="danger"
         onConfirm={() => {
@@ -3500,10 +3680,10 @@ function PostCard({
   // feedstock is whatever the user actually uploaded.
   // Image posts get a smaller fixed height than video. The 78vh card was
   // scoped to the video review case (frame.io-style chrome where the
-  // comments column scrolls inside a bounded right panel) — for a still
+  // comments column scrolls inside a bounded right panel), for a still
   // image at 4:5 the picture only fills ~55vh, so the rest reads as a big
   // empty gap. 60vh hugs the image's natural footprint while still giving
-  // the right column a definite height — which is what pins the composer
+  // the right column a definite height, which is what pins the composer
   // (Approve / Request change) to the bottom of the card. With no fixed
   // height the inner flex-1 has nothing to grow into and the composer
   // floats up next to the caption.
@@ -3519,11 +3699,11 @@ function PostCard({
   // comments rail. Image posts are 4:5 (letting card height drive width
   // makes the column ~62vh wide and squashes the comments column), so
   // cap to ~44vh so the right column keeps room.
-  // Two letterbox fixes layered together. (1) No `bg-black` on the wrapper —
+  // Two letterbox fixes layered together. (1) No `bg-black` on the wrapper , 
   // the inner MediaSurface paints its own black behind the player, and an
   // extra wrapper bg was showing as a frame around the player whenever the
   // column geometry didn't perfectly match the player's intrinsic aspect.
-  // (2) No `md:h-full` on video — the column hugs its 9:16 aspect-ratio so
+  // (2) No `md:h-full` on video, the column hugs its 9:16 aspect-ratio so
   // the player fills it edge-to-edge. With `h-full` the col stretched to
   // the card's fixed 78vh height while the Mux player stayed pinned at
   // its 9:16 aspect, leaving an empty strip under the player. `self-start`
@@ -3582,7 +3762,7 @@ function CommentRow({
   token: string;
   isEditor: boolean;
   authorName?: string;
-  // Called when the user clicks Reply without a name set — parent owns the
+  // Called when the user clicks Reply without a name set, parent owns the
   // name-capture flow (the existing "Your name" modal) and refocuses the
   // composer once the user submits.
   requireName?: () => void;
@@ -3777,7 +3957,7 @@ function CommentRow({
   }
 
   // Editor-only "Revised" toggle on a change-request row. The label is the
-  // same in both states ("Revised") — what changes is the styling: success
+  // same in both states ("Revised"), what changes is the styling: success
   // chip when resolved, neutral outline when still outstanding. Visible
   // always (not just on hover) so editors can scan the history and see
   // what's still on their plate.
@@ -3809,7 +3989,7 @@ function CommentRow({
   // including changes_requested. Earlier we duplicated this control with a
   // labelled "✕ Remove" pill in the footer, but the visual weight competed
   // with Revised and made the row look like it had two equal CTAs. The
-  // hover-X matches every other status row's chrome — one consistent
+  // hover-X matches every other status row's chrome, one consistent
   // delete affordance, no double-button layout.
   const headerDeleteButton = (
     <button
@@ -3823,37 +4003,7 @@ function CommentRow({
     </button>
   );
 
-  const tone = isResolved
-    ? 'text-status-success'
-    : comment.status === 'approved'
-      ? 'text-status-success'
-      : comment.status === 'changes_requested'
-        ? 'text-status-warning'
-        : comment.status === 'caption_edit' ||
-            comment.status === 'tag_edit' ||
-            comment.status === 'video_revised' ||
-            comment.status === 'cover_edit'
-          ? 'text-accent-text'
-          : comment.status === 'schedule_change'
-            ? 'text-accent-text'
-            : 'text-text-secondary';
-  const Icon = isResolved
-    ? CheckCircle
-    : comment.status === 'approved'
-      ? CheckCircle
-      : comment.status === 'changes_requested'
-        ? AlertTriangle
-        : comment.status === 'caption_edit'
-          ? Type
-          : comment.status === 'tag_edit'
-            ? AtSign
-            : comment.status === 'schedule_change'
-              ? Clock
-              : comment.status === 'video_revised'
-                ? Film
-                : comment.status === 'cover_edit'
-                  ? ImageUp
-                  : MessageSquare;
+  const { tone, Icon } = resolveCommentStyle(comment.status, { resolved: isResolved });
   const time = new Date(comment.created_at).toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',
@@ -3867,6 +4017,7 @@ function CommentRow({
         <div className="mb-1 flex items-center gap-2 text-[13px]">
           <Icon size={12} className={tone} />
           <span className="font-medium text-text-primary">{comment.author_name}</span>
+          <RoleChip role={comment.author_role} />
           <span className="text-text-muted">edited the caption · {time}</span>
           {headerDeleteButton}
         </div>
@@ -3898,6 +4049,7 @@ function CommentRow({
         <div className="flex items-center gap-2 text-[13px]">
           <Icon size={12} className={tone} />
           <span className="font-medium text-text-primary">{comment.author_name}</span>
+          <RoleChip role={comment.author_role} />
           <span className="text-text-muted">{comment.content || activityVerb(comment.status)} · {time}</span>
           {headerDeleteButton}
         </div>
@@ -3906,7 +4058,7 @@ function CommentRow({
   }
 
   if (comment.status === 'cover_edit') {
-    // Cover edit row — shows the before/after thumbnails inline so the
+    // Cover edit row, shows the before/after thumbnails inline so the
     // rail reads as a true diff (matches the caption_edit "before / now"
     // pattern). `caption_before` carries the previous cover URL and
     // `caption_after` carries the new one; either side may be null when
@@ -3918,6 +4070,7 @@ function CommentRow({
         <div className="mb-2 flex items-center gap-2 text-[13px]">
           <Icon size={12} className={tone} />
           <span className="font-medium text-text-primary">{comment.author_name}</span>
+          <RoleChip role={comment.author_role} />
           <span className="text-text-muted">
             {after ? 'updated the cover photo' : 'reset the cover photo'} · {time}
           </span>
@@ -3934,7 +4087,7 @@ function CommentRow({
 
   // Default branch covers `comment`, `approved`, and `changes_requested`. The
   // last one is the row that gets the resolveButton + green tint when an
-  // editor marks it done — visible to the client too so they know the revision
+  // editor marks it done, visible to the client too so they know the revision
   // landed.
   const containerClass =
     isResolved
@@ -3944,11 +4097,11 @@ function CommentRow({
         : 'group rounded-lg border border-nativz-border bg-surface px-3 py-2';
   const trailingMeta = isResolved ? 'marked revised · ' : '';
   // changes_requested rows get a persistent footer with Mark revised + Remove
-  // pinned to the bottom — editors don't have to hover to act on the row that
+  // pinned to the bottom, editors don't have to hover to act on the row that
   // matters most. Other rows (comment / approved) keep the lighter
   // hover-revealed delete button in the header.
   const isChangesRequestedRow = comment.status === 'changes_requested';
-  // Timestamp pill — only renders on `comment` / `changes_requested` rows
+  // Timestamp pill, only renders on `comment` / `changes_requested` rows
   // since approval rows aren't anchored. When an `onSeek` callback is wired
   // (modal view with a live player), the pill is clickable and jumps the
   // playhead; otherwise it's a static label.
@@ -3971,7 +4124,7 @@ function CommentRow({
         {formatSeconds(comment.timestamp_seconds)}
       </button>
     ) : null;
-  // NAT-73: reply gate — only top-level `comment` rows get the affordance.
+  // NAT-73: reply gate, only top-level `comment` rows get the affordance.
   // Replies-to-replies are disallowed (one level of nesting), and approval /
   // changes_requested rows aren't threadable surfaces (their "reply" is
   // either the auto-close or a fresh top-level comment).
@@ -3987,6 +4140,7 @@ function CommentRow({
         <div className="mb-1 flex items-center gap-2 text-[13px]">
           <Icon size={12} className={tone} />
           <span className="font-medium text-text-primary">{comment.author_name}</span>
+          <RoleChip role={comment.author_role} />
           <span className="text-text-muted">· {trailingMeta}{time}</span>
           {timestampPill}
           {headerDeleteButton}
@@ -4020,10 +4174,10 @@ function CommentRow({
           </div>
         )}
         {canReply && replyOpen && (
-          // Inline composer — sits inside the parent row so it visually
+          // Inline composer, sits inside the parent row so it visually
           // belongs to the comment it's responding to. Deliberately lighter
           // chrome than the main composer at the bottom of the post (no
-          // attachments, no status picker) — replies are short follow-ups.
+          // attachments, no status picker), replies are short follow-ups.
           <div className="mt-2 rounded-md border border-nativz-border bg-background/40 p-2">
             <textarea
               ref={replyTextareaRef}
@@ -4068,7 +4222,7 @@ function CommentRow({
           </div>
         )}
         {isChangesRequestedRow && (
-          // Footer keeps only Revised — the destructive Remove now lives as
+          // Footer keeps only Revised, the destructive Remove now lives as
           // the hover-X in the header so this row matches every other one.
           <div className="mt-2 flex items-center justify-end border-t border-nativz-border/60 pt-2">
             {resolveButton}
@@ -4076,7 +4230,7 @@ function CommentRow({
         )}
       </div>
       {replies.length > 0 && !isReply && (
-        // Indented thread under the parent. One level only — these child
+        // Indented thread under the parent. One level only, these child
         // rows render with `isReply` so they drop their own Reply button.
         <div className="ml-6 mt-2 space-y-2 border-l-2 border-nativz-border/60 pl-3">
           {replies.map((r) => (
@@ -4126,7 +4280,7 @@ function CoverDiffThumb({ label, src }: { label: string; src: string | null }) {
     <figure className="flex flex-col items-center gap-1">
       <div className="relative h-16 w-12 overflow-hidden rounded border border-nativz-border bg-background/40">
         {src ? (
-          // Plain img — these are reviewer-uploaded JPEG/PNG/WebPs in
+          // Plain img, these are reviewer-uploaded JPEG/PNG/WebPs in
           // scheduler-media. Next/Image would force a remotePatterns
           // entry per share link; not worth the complexity for a 12x16
           // history thumb.
@@ -4181,8 +4335,8 @@ function SchedulePill({
             ? 'bg-surface-hover text-text-muted'
             : 'bg-accent-surface text-accent-text ring-1 ring-accent/40 hover:bg-accent/15 hover:ring-accent'
         }`}
-        title={isPublished ? 'Already published — date is locked' : 'Change scheduled date'}
-        aria-label={isPublished ? `Scheduled ${scheduledLabel}` : `Scheduled ${scheduledLabel} — tap to change`}
+        title={isPublished ? 'Already published, date is locked' : 'Change scheduled date'}
+        aria-label={isPublished ? `Scheduled ${scheduledLabel}` : `Scheduled ${scheduledLabel}, tap to change`}
       >
         <Clock size={13} /> {scheduledLabel}
         {!isPublished && (
@@ -4275,7 +4429,7 @@ function TitleEditor({
   async function save() {
     if (saving) return;
     const next = draft.trim();
-    // Treat the filename fallback as the default — if the user "edited" it
+    // Treat the filename fallback as the default, if the user "edited" it
     // back to the same value, just exit edit mode without a network call.
     if (next === (title ?? fallback ?? '')) {
       setEditing(false);
@@ -4791,7 +4945,7 @@ function AddVideoModal({
 
   // Fetch connected Zernio profiles once when the modal opens so the
   // platform pills are ready by the time the editor finishes picking a
-  // file. Default selection is "all connected" — editor unticks anything
+  // file. Default selection is "all connected", editor unticks anything
   // they don't want this clip going to.
   useEffect(() => {
     if (!open) return;
@@ -4807,7 +4961,7 @@ function AddVideoModal({
           setSelectedPlatformIds(new Set(list.map((p) => p.id)));
         }
       } catch {
-        // non-fatal — schedule endpoint will still default to all on submit
+        // non-fatal, schedule endpoint will still default to all on submit
       }
     })();
     return () => {
@@ -4844,7 +4998,7 @@ function AddVideoModal({
           }
         }
       } catch {
-        // transient — keep polling
+        // transient, keep polling
       }
       timer = window.setTimeout(tick, 3000);
     }
@@ -4963,7 +5117,7 @@ function AddVideoModal({
       if (!res.ok) {
         throw new Error(typeof json?.error === 'string' ? json.error : 'Failed to schedule');
       }
-      toast.success('Post added — the link bounced back to needs approval');
+      toast.success('Post added, the link bounced back to needs approval');
       await onDone();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to schedule');
@@ -5662,72 +5816,3 @@ function buildScheduledAtForDate(
   return `${target.getFullYear()}-${pad(target.getMonth() + 1)}-${pad(target.getDate())}T${pad(hours)}:${pad(minutes)}`;
 }
 
-function AttachmentChip({
-  attachment,
-  onRemove,
-}: {
-  attachment: CommentAttachment;
-  onRemove: () => void;
-}) {
-  const isImage = attachment.mime_type.startsWith('image/');
-  return (
-    <div className="group relative flex items-center gap-2 rounded-lg border border-nativz-border bg-background/40 py-1 pl-1 pr-7 text-xs text-text-secondary">
-      {isImage ? (
-        <img src={attachment.url} alt="" className="h-8 w-8 rounded object-cover" />
-      ) : (
-        <div className="flex h-8 w-8 items-center justify-center rounded bg-surface-hover">
-          <FileIcon size={14} className="text-text-muted" />
-        </div>
-      )}
-      <span className="max-w-[160px] truncate">{attachment.filename}</span>
-      <button
-        type="button"
-        onClick={onRemove}
-        className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 text-text-muted transition-colors hover:bg-surface-hover hover:text-text-secondary"
-        aria-label={`Remove ${attachment.filename}`}
-      >
-        <X size={12} />
-      </button>
-    </div>
-  );
-}
-
-function CommentAttachmentTile({ attachment }: { attachment: CommentAttachment }) {
-  const isImage = attachment.mime_type.startsWith('image/');
-  const isVideo = attachment.mime_type.startsWith('video/');
-  if (isImage) {
-    return (
-      <a
-        href={attachment.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="block overflow-hidden rounded-md border border-nativz-border bg-background/40"
-      >
-        <img src={attachment.url} alt={attachment.filename} className="h-24 w-24 object-cover" />
-      </a>
-    );
-  }
-  if (isVideo) {
-    return (
-      <a
-        href={attachment.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="block overflow-hidden rounded-md border border-nativz-border bg-background/40"
-      >
-        <video src={attachment.url} className="h-24 w-24 object-cover" muted playsInline />
-      </a>
-    );
-  }
-  return (
-    <a
-      href={attachment.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="inline-flex items-center gap-1.5 rounded-md border border-nativz-border bg-background/40 px-2 py-1.5 text-xs text-accent-text transition-colors hover:bg-surface-hover"
-    >
-      <FileIcon size={12} />
-      <span className="max-w-[180px] truncate">{attachment.filename}</span>
-    </a>
-  );
-}

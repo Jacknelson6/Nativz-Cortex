@@ -10,6 +10,8 @@ import {
   CheckCircle,
   Clock,
   Download,
+  Eye,
+  EyeOff,
   File as FileIcon,
   FileVideo,
   Film,
@@ -27,11 +29,21 @@ import {
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Dialog } from '@/components/ui/dialog';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
 import { thumbUrl } from '@/lib/calendar/thumb-url';
 import { ShareTour, ShareTourLaunchButton, EDIT_SHARE_BEATS } from '@/components/share/share-tour';
+import {
+  ShareGatewayModal,
+  readGuestName,
+  clearGuestName,
+} from '@/components/share/gateway-modal';
+import { RoleChip } from '@/components/share/role-chip';
+import {
+  AttachmentChip,
+  CommentAttachmentTile,
+} from '@/components/share/comment-attachments';
+import { resolveCommentStyle } from '@/lib/share/comment-style';
 
 const EDIT_TOUR_STORAGE_KEY = 'cortex.share.editTourSeen';
 
@@ -80,6 +92,10 @@ interface SharedComment {
   share_link_id: string | null;
   author_name: string;
   author_user_id: string | null;
+  // PRD 05: server-enforced role tag (admin | viewer | guest). Falls back
+  // to 'guest' for pre-migration rows so the chip never renders for
+  // historical comments that predate the role column.
+  author_role: 'admin' | 'viewer' | 'guest';
   content: string;
   status: SharedCommentStatus;
   attachments: CommentAttachment[];
@@ -171,9 +187,11 @@ export default function EditingProjectSharePage({
     try {
       const storedName =
         typeof window !== 'undefined'
-          ? window.localStorage
-              .getItem(`cortex_edit_share_name_${token}`)
-              ?.trim() ?? ''
+          ? (readGuestName(token) ||
+              window.localStorage
+                .getItem(`cortex_edit_share_name_${token}`)
+                ?.trim() ||
+              '')
           : '';
       const qs = storedName ? `?as=${encodeURIComponent(storedName)}` : '';
       const res = await fetch(`/api/editing/share/${token}${qs}`);
@@ -195,9 +213,11 @@ export default function EditingProjectSharePage({
       try {
         const storedName =
           typeof window !== 'undefined'
-            ? window.localStorage
-                .getItem(`cortex_edit_share_name_${token}`)
-                ?.trim() ?? ''
+            ? (readGuestName(token) ||
+                window.localStorage
+                  .getItem(`cortex_edit_share_name_${token}`)
+                  ?.trim() ||
+                '')
             : '';
         const qs = storedName ? `?as=${encodeURIComponent(storedName)}` : '';
         const res = await fetch(`/api/editing/share/${token}${qs}`);
@@ -264,23 +284,144 @@ function SharedReviewView({
   setData: (updater: (prev: SharedPayload | null) => SharedPayload | null) => void;
   refetch: () => Promise<void>;
 }) {
-  const storageKey = `cortex_edit_share_name_${token}`;
+  const legacyStorageKey = `cortex_edit_share_name_${token}`;
   const [authorName, setAuthorName] = useState('');
-  const [nameModalOpen, setNameModalOpen] = useState(false);
-  const [pendingName, setPendingName] = useState('');
+  const [gatewayOpen, setGatewayOpen] = useState(false);
+  const [gatewayInfo, setGatewayInfo] = useState<{
+    agencyMismatch: boolean;
+    agencyAvailable: boolean;
+  }>({ agencyMismatch: false, agencyAvailable: false });
+  const [boundIdentity, setBoundIdentity] = useState<{
+    displayName: string;
+    role: 'admin' | 'super_admin' | 'viewer';
+  } | null>(null);
   const [approveAllOpen, setApproveAllOpen] = useState(false);
   const [approvingAll, setApprovingAll] = useState(false);
   const [downloadingAll, setDownloadingAll] = useState(false);
+  // PRD 06 §"View as client": admins flip this to preview the page
+  // without admin chrome (replace/remove/cover/mark-revised affordances).
+  // Local-only, does not change server-side identity.
+  const [viewAsClient, setViewAsClient] = useState(false);
+  const effectiveIsEditor = data.isEditor && !viewAsClient;
 
+  // PRD 02 §"Server resolution". Probe identity first; auto-bound
+  // sessions skip the gateway, gateway/guest paths fall back to the
+  // legacy stored name if any. Mirrors the calendar share flow.
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const stored = window.localStorage.getItem(storageKey);
-    if (stored && stored.trim()) {
-      setAuthorName(stored.trim());
-    } else {
-      setNameModalOpen(true);
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/share/${token}/identity`);
+        const json = (await res.json().catch(() => null)) as
+          | {
+              state: 'auto_bound' | 'gateway' | 'expired' | 'archived' | 'not_found';
+              identity?: { displayName: string; role: 'admin' | 'super_admin' | 'viewer' };
+              sessionPresent?: boolean;
+              agencyMismatch?: boolean;
+              agencyAvailable?: boolean;
+            }
+          | null;
+        if (cancelled || !json) return;
+
+        if (json.state === 'auto_bound' && json.identity) {
+          setAuthorName(json.identity.displayName);
+          setBoundIdentity({
+            displayName: json.identity.displayName,
+            role: json.identity.role,
+          });
+          setGatewayOpen(false);
+          return;
+        }
+
+        if (json.state === 'gateway') {
+          const guest =
+            readGuestName(token) ||
+            (typeof window !== 'undefined'
+              ? window.localStorage.getItem(legacyStorageKey)?.trim() ?? ''
+              : '');
+          if (guest) {
+            setAuthorName(guest);
+            setGatewayOpen(false);
+          } else {
+            setGatewayOpen(true);
+          }
+          setGatewayInfo({
+            agencyMismatch: !!json.agencyMismatch,
+            agencyAvailable: !!json.agencyAvailable,
+          });
+          return;
+        }
+      } catch {
+        if (typeof window !== 'undefined') {
+          const guest =
+            readGuestName(token) ||
+            window.localStorage.getItem(legacyStorageKey)?.trim() ||
+            '';
+          if (guest) {
+            setAuthorName(guest);
+            setGatewayOpen(false);
+          } else {
+            setGatewayOpen(true);
+          }
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, legacyStorageKey]);
+
+  async function reprobeIdentity() {
+    try {
+      const res = await fetch(`/api/share/${token}/identity`);
+      const json = (await res.json().catch(() => null)) as
+        | {
+            state: 'auto_bound' | 'gateway' | 'expired' | 'archived' | 'not_found';
+            identity?: { displayName: string; role: 'admin' | 'super_admin' | 'viewer' };
+            agencyMismatch?: boolean;
+            agencyAvailable?: boolean;
+          }
+        | null;
+      if (!json) return;
+      if (json.state === 'auto_bound' && json.identity) {
+        setAuthorName(json.identity.displayName);
+        setBoundIdentity({
+          displayName: json.identity.displayName,
+          role: json.identity.role,
+        });
+        return;
+      }
+      if (json.state === 'gateway') {
+        setBoundIdentity(null);
+        setGatewayInfo({
+          agencyMismatch: !!json.agencyMismatch,
+          agencyAvailable: !!json.agencyAvailable,
+        });
+      }
+    } catch {
+      /* non-fatal */
     }
-  }, [storageKey]);
+  }
+
+  async function handleSwitchIdentity() {
+    if (boundIdentity) {
+      try {
+        await fetch(`/api/share/${token}/auth/login`, { method: 'DELETE' });
+      } catch {
+        /* ignore */
+      }
+      setBoundIdentity(null);
+    }
+    clearGuestName(token);
+    try {
+      window.localStorage.removeItem(legacyStorageKey);
+    } catch {
+      /* ignore */
+    }
+    setAuthorName('');
+    await reprobeIdentity();
+    setGatewayOpen(true);
+  }
 
   // Deep-link support: webhook chat pings include `#video-N` so the link
   // jumps straight to the cut under discussion.
@@ -296,19 +437,6 @@ function SharedReviewView({
       el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   }, [videoCount]);
-
-  function saveName(value: string) {
-    const trimmed = value.trim();
-    if (!trimmed) {
-      toast.error('Please enter your name');
-      return;
-    }
-    setAuthorName(trimmed);
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(storageKey, trimmed);
-    }
-    setNameModalOpen(false);
-  }
 
   function appendComment(videoId: string, comment: SharedComment) {
     setData((prev) =>
@@ -386,8 +514,7 @@ function SharedReviewView({
   // ordering) sees inserts in order.
   async function approveAll() {
     if (!authorName.trim()) {
-      setPendingName(authorName);
-      setNameModalOpen(true);
+      setGatewayOpen(true);
       return;
     }
     const targets = data.videos.filter(
@@ -623,6 +750,28 @@ function SharedReviewView({
                   <span className="sm:hidden">Sign in</span>
                 </a>
               )}
+              {data.isEditor && (
+                <button
+                  type="button"
+                  onClick={() => setViewAsClient((v) => !v)}
+                  className={`inline-flex items-center gap-1.5 rounded-[var(--nz-btn-radius)] border px-3.5 py-2 text-sm font-medium transition-all ${
+                    viewAsClient
+                      ? 'border-accent-text/50 bg-accent-surface/40 text-accent-text hover:bg-accent-surface/60'
+                      : 'border-nativz-border bg-transparent text-text-secondary hover:bg-surface-hover hover:text-text-primary'
+                  }`}
+                  title={
+                    viewAsClient
+                      ? 'Switch back to team view'
+                      : 'Preview the page as a brand reviewer would see it'
+                  }
+                  aria-pressed={viewAsClient}
+                >
+                  {viewAsClient ? <EyeOff size={14} /> : <Eye size={14} />}
+                  <span className="hidden sm:inline">
+                    {viewAsClient ? 'Team view' : 'View as client'}
+                  </span>
+                </button>
+              )}
               {total > 0 && (
                 <ShareTourLaunchButton storageKey={EDIT_TOUR_STORAGE_KEY} />
               )}
@@ -654,8 +803,7 @@ function SharedReviewView({
                   type="button"
                   onClick={() => {
                     if (!authorName.trim()) {
-                      setPendingName(authorName);
-                      setNameModalOpen(true);
+                      setGatewayOpen(true);
                       return;
                     }
                     setApproveAllOpen(true);
@@ -682,14 +830,16 @@ function SharedReviewView({
               {authorName && (
                 <button
                   type="button"
-                  onClick={() => {
-                    setPendingName(authorName);
-                    setNameModalOpen(true);
-                  }}
+                  onClick={() => void handleSwitchIdentity()}
                   className="rounded-[var(--nz-btn-radius)] border border-nativz-border bg-transparent px-3.5 py-2 text-sm font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary"
-                  title="Change name"
+                  title={boundIdentity ? 'Sign out and switch' : 'Change name'}
                 >
                   {authorName}
+                  {boundIdentity ? (
+                    <span className="ml-1.5 text-[10px] uppercase tracking-wider text-text-muted">
+                      {boundIdentity.role === 'viewer' ? 'client' : 'team'}
+                    </span>
+                  ) : null}
                 </button>
               )}
             </div>
@@ -702,7 +852,7 @@ function SharedReviewView({
               <CheckCircle size={14} /> {approvedCount} approved
             </span>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-status-warning/12 px-2.5 py-1 text-status-warning">
-              <AlertTriangle size={14} /> {changesCount} changes requested
+              <AlertTriangle size={14} /> {changesCount} {changesCount === 1 ? 'revision' : 'revisions'}
             </span>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-hover px-2.5 py-1 text-text-muted">
               <Clock size={14} /> link expires {expiresLabel}
@@ -745,7 +895,7 @@ function SharedReviewView({
                 video={v}
                 projectId={data.project.id}
                 projectType={data.project.project_type}
-                isEditor={data.isEditor}
+                isEditor={effectiveIsEditor}
                 token={token}
                 authorName={authorName}
                 onCommentAdded={(c) => appendComment(v.id, c)}
@@ -754,10 +904,7 @@ function SharedReviewView({
                 onVideoReplaced={refetch}
                 onVideoDeleted={() => removeVideoLocal(v.id)}
                 onTitleUpdated={(title) => updateVideoTitleLocal(v.id, title)}
-                requireName={() => {
-                  setPendingName(authorName);
-                  setNameModalOpen(true);
-                }}
+                requireName={() => setGatewayOpen(true)}
               />
             ))
           )}
@@ -765,54 +912,32 @@ function SharedReviewView({
       </main>
 
       <ShareTour
-        enabled={!nameModalOpen && data.videos.length > 0}
+        enabled={!gatewayOpen && data.videos.length > 0}
         beats={EDIT_SHARE_BEATS}
         storageKey={EDIT_TOUR_STORAGE_KEY}
       />
 
-      <Dialog
-        open={nameModalOpen}
-        onClose={() => {
-          if (authorName.trim()) {
-            setNameModalOpen(false);
-          } else {
-            toast.error('Please enter your name to continue');
+      <ShareGatewayModal
+        open={gatewayOpen}
+        token={token}
+        agencyMismatch={gatewayInfo.agencyMismatch}
+        agencyAvailable={gatewayInfo.agencyAvailable}
+        defaultGuestName={authorName}
+        onLoggedIn={async () => {
+          await reprobeIdentity();
+          setGatewayOpen(false);
+          await refetch();
+        }}
+        onGuestNamed={(name) => {
+          setAuthorName(name);
+          try {
+            window.localStorage.setItem(legacyStorageKey, name);
+          } catch {
+            /* ignore */
           }
+          setGatewayOpen(false);
         }}
-        onCancel={(e) => {
-          if (!authorName.trim()) e.preventDefault();
-        }}
-        title=""
-        maxWidth="sm"
-      >
-        <div className="space-y-3">
-          <h2 className="font-display text-lg font-semibold tracking-tight text-text-primary">
-            Welcome
-          </h2>
-          <p className="text-sm text-text-secondary">
-            Tell us who{APOS}s reviewing so your feedback is attributed correctly.
-          </p>
-          <input
-            value={pendingName}
-            onChange={(e) => setPendingName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') saveName(pendingName);
-            }}
-            placeholder="Your name"
-            autoFocus
-            className="w-full rounded-lg border border-nativz-border bg-transparent px-3 py-2 text-base text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent sm:text-sm"
-          />
-          <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={() => saveName(pendingName)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-accent-contrast transition-opacity hover:opacity-90"
-            >
-              Continue
-            </button>
-          </div>
-        </div>
-      </Dialog>
+      />
 
       <ConfirmDialog
         open={approveAllOpen}
@@ -862,7 +987,7 @@ function ShareHeaderLogo() {
 function latestReview(comments: SharedComment[]): ReviewStatus | null {
   // Walk newest → oldest and return the first "live" review signal. A
   // changes_requested row that's been marked Revised (metadata.resolved)
-  // is no longer live — we skip past it so the pill can fall through to
+  // is no longer live, we skip past it so the pill can fall through to
   // an earlier approval.
   for (let i = comments.length - 1; i >= 0; i--) {
     const c = comments[i];
@@ -941,6 +1066,9 @@ function VideoCard({
   const [playerReady, setPlayerReady] = useState(false);
   const [livePlayheadSeconds, setLivePlayheadSeconds] = useState(0);
   const [pinEnabled, setPinEnabled] = useState(true);
+  // PRD 01: composer defaults to plain feedback. Reviewer opts into "revision"
+  // explicitly when the note represents a change request.
+  const [markAsRevision, setMarkAsRevision] = useState(false);
 
   const [uploadingRevision, setUploadingRevision] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
@@ -1038,6 +1166,14 @@ function VideoCard({
       toast.error('Please enter revision notes or attach a file');
       return;
     }
+    if (
+      status === 'comment' &&
+      !commentText.trim() &&
+      pendingAttachments.length === 0
+    ) {
+      toast.error('Please enter a comment or attach a file');
+      return;
+    }
 
     // Optimistic flow mirrors the calendar share page: paint a temp
     // comment so the approve / changes_requested chip flips state without
@@ -1059,6 +1195,9 @@ function VideoCard({
       share_link_id: null,
       author_name: trimmedAuthor,
       author_user_id: null,
+      // PRD 05: server derives the real role from the session. Local row
+      // stays 'guest' so RoleChip renders nothing until the real row lands.
+      author_role: 'guest',
       content: resolvedContent,
       // Local intent; server may auto-upgrade changes_requested → approved
       // and we reconcile when the real row lands.
@@ -1073,8 +1212,13 @@ function VideoCard({
     setCommentText('');
     setPendingAttachments([]);
     setPinEnabled(true);
+    setMarkAsRevision(false);
     const optimisticToastId = toast.success(
-      status === 'approved' ? 'Video approved' : 'Revision added',
+      status === 'approved'
+        ? 'Video approved'
+        : status === 'changes_requested'
+          ? 'Revision added'
+          : 'Comment added',
     );
 
     setSubmitting(true);
@@ -1135,11 +1279,11 @@ function VideoCard({
     }
   }
 
-  // Editor-only "Replace" — three-step flow:
+  // Editor-only "Replace", three-step flow:
   //   1) POST /api/admin/editing/projects/:id/videos with replace_video_id
   //      → server mints a Mux direct upload + inserts a placeholder row.
   //   2) PUT file bytes straight to the Mux upload URL (no Content-Type
-  //      header — Mux infers it). The webhook flips mux_status to ready
+  //      header, Mux infers it). The webhook flips mux_status to ready
   //      once Mux finishes packaging.
   //   3) POST /api/editing/share/:token/comment with status='video_revised'
   //      so the activity feed reflects the new cut, then refetch the page.
@@ -1238,7 +1382,7 @@ function VideoCard({
           }),
         });
       } catch {
-        // Non-fatal — the upload itself succeeded.
+        // Non-fatal, the upload itself succeeded.
       }
 
       toast.success(incomingIsImage ? 'New image uploaded' : 'New cut uploaded');
@@ -1287,7 +1431,7 @@ function VideoCard({
         )}
         {review === 'changes_requested' && (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-status-warning/12 px-3 py-1.5 text-sm font-medium text-status-warning ring-1 ring-status-warning/30">
-            <AlertTriangle size={13} /> Changes requested
+            <AlertTriangle size={13} /> Revision requested
           </span>
         )}
         {review === null && (
@@ -1520,7 +1664,7 @@ function VideoCard({
         <textarea
           value={commentText}
           onChange={(e) => setCommentText(e.target.value)}
-          placeholder="Notes on the video (cuts, music, hook, etc.)"
+          placeholder="Add a comment, or toggle Mark as revision to request changes…"
           rows={3}
           className="w-full resize-none rounded-t-lg bg-transparent px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
           disabled={submitting}
@@ -1589,15 +1733,32 @@ function VideoCard({
                 <MapPin size={13} /> Reference timestamp
               </button>
             ))}
+          {/* PRD 01: revision toggle. Default is plain feedback; flip to
+              promote the submit to a revision request. */}
           <button
             type="button"
-            onClick={() => submit('changes_requested')}
+            onClick={() => setMarkAsRevision((v) => !v)}
+            disabled={submitting || uploading}
+            aria-pressed={markAsRevision}
+            title={markAsRevision ? 'Sending as revision request' : 'Send as feedback only'}
+            className={`ml-auto inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-all disabled:opacity-50 ${
+              markAsRevision
+                ? 'bg-status-warning/15 text-status-warning ring-1 ring-status-warning/40'
+                : 'bg-transparent text-text-secondary hover:bg-surface-hover hover:text-text-primary'
+            }`}
+          >
+            <AlertTriangle size={13} />
+            {markAsRevision ? 'Revision' : 'Mark as revision'}
+          </button>
+          <button
+            type="button"
+            onClick={() => submit(markAsRevision ? 'changes_requested' : 'comment')}
             disabled={
               submitting ||
               uploading ||
               (!commentText.trim() && pendingAttachments.length === 0)
             }
-            className="ml-auto inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-[color:var(--accent-contrast)] shadow-[var(--shadow-card)] transition-all hover:bg-accent-hover hover:shadow-[var(--shadow-card-hover)] active:scale-[0.98] disabled:opacity-50 disabled:hover:bg-accent"
+            className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-[color:var(--accent-contrast)] shadow-[var(--shadow-card)] transition-all hover:bg-accent-hover hover:shadow-[var(--shadow-card-hover)] active:scale-[0.98] disabled:opacity-50 disabled:hover:bg-accent"
           >
             {submitting ? (
               <Loader2 size={12} className="animate-spin" />
@@ -1893,24 +2054,7 @@ function CommentRow({
     </button>
   );
 
-  const tone = isResolved
-    ? 'text-status-success'
-    : comment.status === 'approved'
-      ? 'text-status-success'
-      : comment.status === 'changes_requested'
-        ? 'text-status-warning'
-        : comment.status === 'video_revised'
-          ? 'text-accent-text'
-          : 'text-text-secondary';
-  const Icon = isResolved
-    ? CheckCircle
-    : comment.status === 'approved'
-      ? CheckCircle
-      : comment.status === 'changes_requested'
-        ? AlertTriangle
-        : comment.status === 'video_revised'
-          ? Film
-          : MessageSquare;
+  const { tone, Icon } = resolveCommentStyle(comment.status, { resolved: isResolved });
   const time = new Date(comment.created_at).toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',
@@ -1924,6 +2068,7 @@ function CommentRow({
         <div className="flex items-center gap-2 text-[13px]">
           <Icon size={12} className={tone} />
           <span className="font-medium text-text-primary">{comment.author_name}</span>
+          <RoleChip role={comment.author_role} />
           <span className="text-text-muted">
             {comment.content || 're-uploaded the video'} · {time}
           </span>
@@ -1973,6 +2118,7 @@ function CommentRow({
       <div className="mb-1 flex items-center gap-2 text-[13px]">
         <Icon size={12} className={tone} />
         <span className="font-medium text-text-primary">{comment.author_name}</span>
+        <RoleChip role={comment.author_role} />
         <span className="text-text-muted">
           · {trailingMeta}
           {time}
@@ -1998,94 +2144,6 @@ function CommentRow({
         </div>
       )}
     </div>
-  );
-}
-
-function AttachmentChip({
-  attachment,
-  onRemove,
-}: {
-  attachment: CommentAttachment;
-  onRemove: () => void;
-}) {
-  const isImage = attachment.mime_type.startsWith('image/');
-  return (
-    <div className="group relative flex items-center gap-2 rounded-lg border border-nativz-border bg-background/40 py-1 pl-1 pr-7 text-xs text-text-secondary">
-      {isImage ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={attachment.url}
-          alt=""
-          className="h-8 w-8 rounded object-cover"
-        />
-      ) : (
-        <div className="flex h-8 w-8 items-center justify-center rounded bg-surface-hover">
-          <FileIcon size={14} className="text-text-muted" />
-        </div>
-      )}
-      <span className="max-w-[160px] truncate">{attachment.filename}</span>
-      <button
-        type="button"
-        onClick={onRemove}
-        className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 text-text-muted transition-colors hover:bg-surface-hover hover:text-text-secondary"
-        aria-label={`Remove ${attachment.filename}`}
-      >
-        <X size={12} />
-      </button>
-    </div>
-  );
-}
-
-function CommentAttachmentTile({ attachment }: { attachment: CommentAttachment }) {
-  const isImage = attachment.mime_type.startsWith('image/');
-  const isVideo = attachment.mime_type.startsWith('video/');
-  if (isImage) {
-    return (
-      <a
-        href={attachment.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="block overflow-hidden rounded-md border border-nativz-border bg-background/40"
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={attachment.url}
-          alt={attachment.filename}
-          className="h-24 w-24 object-cover"
-        />
-      </a>
-    );
-  }
-  if (isVideo) {
-    return (
-      <a
-        href={attachment.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="block overflow-hidden rounded-md border border-nativz-border bg-background/40"
-      >
-        <video
-          src={attachment.url}
-          className="h-24 w-24 bg-black object-cover"
-          muted
-          playsInline
-          // preload=metadata pulls the first frame so the video tile shows
-          // a poster instead of a black square next to image tiles.
-          preload="metadata"
-        />
-      </a>
-    );
-  }
-  return (
-    <a
-      href={attachment.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="inline-flex items-center gap-1.5 rounded-md border border-nativz-border bg-background/40 px-2 py-1.5 text-xs text-accent-text transition-colors hover:bg-surface-hover"
-    >
-      <FileIcon size={12} />
-      <span className="max-w-[180px] truncate">{attachment.filename}</span>
-    </a>
   );
 }
 
@@ -2238,7 +2296,7 @@ function formatShoot(iso: string): string {
   });
 }
 
-// See app/c/[token]/page.tsx readJsonSafe — same defensive parse so empty
+// See app/c/[token]/page.tsx readJsonSafe, same defensive parse so empty
 // or non-JSON bodies don't surface as "Unexpected end of JSON input" to
 // editing-share visitors.
 async function readJsonSafe(
