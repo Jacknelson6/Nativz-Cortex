@@ -208,6 +208,12 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/c/') ||
     pathname.startsWith('/api/calendar/share/') ||
     pathname.startsWith('/api/editing/share/') ||
+    // Cross-surface share-link auth + identity endpoints (PRD 04 + 05).
+    // /api/share/[token]/auth/login mints a Supabase session for an
+    // agency-matching admin/viewer, /api/share/[token]/identity reports
+    // the resolved actor for the gateway modal. Both validate the share
+    // token on every hit.
+    pathname.startsWith('/api/share/') ||
     // Other share-token-gated public surfaces. Each route validates the
     // token on every hit; minting endpoints in the same file (POST in
     // /api/scheduler/share + /api/scheduler/review) do their own

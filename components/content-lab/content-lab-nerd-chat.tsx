@@ -27,7 +27,7 @@ import { contentLabTopicSearchStorageKey } from '@/lib/content-lab/topic-search-
 // Quick-start prompts are tuned to push the Nerd toward artifact-style
 // outputs (mermaid flows, structured scripts, effort/impact quadrants)
 // that render as live visuals in the chat and export cleanly as PDFs.
-// Prompts stand alone — the Nerd already has the active client pinned via
+// Prompts stand alone, the Nerd already has the active client pinned via
 // clientId on the chat request, so we don't need to parrot the brand name
 // back at the user in the composer.
 const SUGGESTIONS = [
@@ -44,7 +44,7 @@ const SUGGESTIONS = [
   {
     label: 'Explain this topic search',
     prompt:
-      "Summarize the attached topic search — what's resonating, the strongest themes, the audience sentiment, and what it means.",
+      "Summarize the attached topic search, what's resonating, the strongest themes, the audience sentiment, and what it means.",
   },
   {
     label: 'What does this mean?',
@@ -56,7 +56,7 @@ type ContentLabNerdChatProps = {
   clientId: string;
   clientName: string;
   clientSlug: string;
-  /** Topic search IDs the user pinned in Strategy Lab — the initial attached set for the chat context. */
+  /** Topic search IDs the user pinned in Strategy Lab, the initial attached set for the chat context. */
   pinnedTopicSearchIds?: string[];
   /**
    * Portal mode: scoped to one org-bound client, no multi-client switcher,
@@ -85,7 +85,7 @@ interface TopicSearchItem {
 }
 
 /**
- * Admin Nerd chat embedded in Strategy Lab — full tool access, client scoped via
+ * Admin Nerd chat embedded in Strategy Lab, full tool access, client scoped via
  * @mention resolution, and topic-search attachment so Cortex can reason over the
  * actual research findings (not just IDs).
  *
@@ -93,7 +93,7 @@ interface TopicSearchItem {
  * pillar, video idea, and scripting work lives. Attached topic searches flow into
  * the `searchContext` field on `/api/nerd/chat`, which injects the full topic
  * search content (summary, trending topics, metrics, video ideas, emotions) into
- * the system prompt — same path `/admin/nerd` already uses.
+ * the system prompt, same path `/admin/nerd` already uses.
  */
 export function ContentLabNerdChat({
   clientId,
@@ -120,7 +120,7 @@ export function ContentLabNerdChat({
         if (ids.length > 0) setPinnedTopicSearchIds(ids);
       }
     } catch {
-      /* quota / JSON — ignore */
+      /* quota / JSON, ignore */
     }
   }, [clientId, pinnedFromProps]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -143,7 +143,7 @@ export function ContentLabNerdChat({
   // so the history dropdown refetches when the user pops it open next.
   const [conversationsRefreshToken, setConversationsRefreshToken] = useState(0);
 
-  // Topic search attachment — initial set comes from pinned + auto-attach
+  // Topic search attachment, initial set comes from pinned + auto-attach
   // latest, both handled inside ContentLabTopicSearchChipBar now. The
   // chip bar notifies us whenever the client's search list loads so we can
   // look up attached-search metadata for the PDF export.
@@ -164,7 +164,7 @@ export function ContentLabNerdChat({
 
   // Topic plans are produced via the create_topic_plan tool call, which
   // renders an artifact download card in the chat (see topic-plan-
-  // artifact-card.tsx). No prose auto-export anymore — that was a
+  // artifact-card.tsx). No prose auto-export anymore, that was a
   // duplicate code path that competed with the real artifact flow.
 
   // Interactive /idea flow: when the user submits a bare "/idea" with no
@@ -205,7 +205,7 @@ export function ContentLabNerdChat({
     return () => { cancelled = true; };
   }, [clientId]);
 
-  // Slash command menu — same /ideas, /script, /pillars, /hooks, /strategy etc.
+  // Slash command menu, same /ideas, /script, /pillars, /hooks, /strategy etc.
   // commands the admin Nerd registers centrally.
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [slashQuery, setSlashQuery] = useState('');
@@ -249,7 +249,7 @@ export function ContentLabNerdChat({
     fetch(`/api/nerd/conversations/${storedId}`)
       .then(async (res) => {
         if (!res.ok) {
-          // Conversation was deleted or doesn't belong to this user — drop the stale pointer.
+          // Conversation was deleted or doesn't belong to this user, drop the stale pointer.
           clearContentLabNerdConversationId(clientId);
           return null;
         }
@@ -273,12 +273,12 @@ export function ContentLabNerdChat({
         setConversationTitle(data.title?.trim() ? data.title : null);
         setConversationMessageCount(loaded.length);
         setFormatVideoId(data.format_video_id ?? null);
-        // Resumed conversation — don't re-send the session hint on the first
+        // Resumed conversation, don't re-send the session hint on the first
         // new user turn, since the model already has the history.
         sessionHintRef.current = null;
       })
       .catch(() => {
-        /* stale pointer — leave as-is, new chat starts clean */
+        /* stale pointer, leave as-is, new chat starts clean */
       })
       .finally(() => {
         if (!cancelled) setLoadingConversation(false);
@@ -310,7 +310,7 @@ export function ContentLabNerdChat({
 
   const handleSlashSelect = useCallback(
     (cmd: { name: string; type: string }) => {
-      // /generate defers expansion — fill "/generate " and let the user
+      // /generate defers expansion, fill "/generate " and let the user
       // type args (video ideas, scripts, topics, a count). The expansion
       // happens at send time via the interactive flow in handleSend.
       if (cmd.name === 'generate') {
@@ -320,7 +320,7 @@ export function ContentLabNerdChat({
       }
       // Other built-ins: expand immediately so the user can see the full
       // prompt before hitting Enter. Skill-sourced: just put "/slug " in
-      // the input — handleSend expands the template client-side on submit.
+      // the input, handleSend expands the template client-side on submit.
       const builtin = getCommand(cmd.name);
       if (builtin) {
         if (builtin.type === 'ai' && builtin.expandPrompt) {
@@ -340,7 +340,7 @@ export function ContentLabNerdChat({
     [unifiedCommands],
   );
 
-  // Keyboard nav for the slash menu — Arrow keys move selection, Enter picks,
+  // Keyboard nav for the slash menu, Arrow keys move selection, Enter picks,
   // Escape closes. Runs BEFORE PromptInput's own Enter handling via the
   // onKeyDown prop so it can preventDefault to block submit.
   const handleInputKeyDown = useCallback(
@@ -355,7 +355,7 @@ export function ContentLabNerdChat({
           (i - 1 + filteredSlashCommands.length) % filteredSlashCommands.length,
         );
       } else if (e.key === 'Tab') {
-        // Tab-complete: fill "/commandname " without expanding — let the
+        // Tab-complete: fill "/commandname " without expanding, let the
         // user type args after. Works like Claude Code's skill tab-complete.
         const cmd = filteredSlashCommands[slashActiveIndex] ?? filteredSlashCommands[0];
         if (cmd) {
@@ -434,7 +434,7 @@ export function ContentLabNerdChat({
       if (generateMatch && !pendingGenerateArgs) {
         const args = generateMatch[1].trim();
         if (!args) {
-          // No args — ask the user what they want
+          // No args, ask the user what they want
           setInput('');
           setPendingGenerateArgs(true);
           const userMsg: ChatMessage = {
@@ -454,13 +454,13 @@ export function ContentLabNerdChat({
           setMessages((prev) => [...prev, userMsg, promptMsg]);
           return;
         }
-        // Args present — expand via the built-in /generate command
+        // Args present, expand via the built-in /generate command
         const builtin = getCommand('generate');
         if (builtin?.expandPrompt) {
           content = builtin.expandPrompt(args);
         }
       }
-      // Step 2 — pendingGenerateArgs was set, user replied with type + count
+      // Step 2, pendingGenerateArgs was set, user replied with type + count
       if (pendingGenerateArgs) {
         setPendingGenerateArgs(false);
         const builtin = getCommand('generate');
@@ -470,7 +470,7 @@ export function ContentLabNerdChat({
       }
 
       // ── Interactive /idea follow-up (legacy alias) ─────────────────────
-      // Step 1 — user sent bare "/idea" (or "/idea " with no number).
+      // Step 1, user sent bare "/idea" (or "/idea " with no number).
       // Don't call the AI: display a prompt message asking how many ideas
       // they want, flip pendingIdeaCount, and wait for their next input.
       if (!pendingIdeaCount && /^\/idea\s*$/i.test(content)) {
@@ -485,13 +485,13 @@ export function ContentLabNerdChat({
         const promptMsg: ChatMessage = {
           id: crypto.randomUUID(),
           role: 'assistant',
-          content: 'How many ideas do you want? Reply with a number (3–50).',
+          content: 'How many ideas do you want? Reply with a number (3, 50).',
           createdAt: Date.now(),
         };
         setMessages((prev) => [...prev, userMsg, promptMsg]);
         return;
       }
-      // Step 2 — pendingIdeaCount was set, treat this input as the count.
+      // Step 2, pendingIdeaCount was set, treat this input as the count.
       if (pendingIdeaCount) {
         const match = content.match(/\d{1,3}/);
         if (!match) {
@@ -504,7 +504,7 @@ export function ContentLabNerdChat({
           const retryMsg: ChatMessage = {
             id: crypto.randomUUID(),
             role: 'assistant',
-            content: "I didn't catch a number there. Reply with just a digit like `12` — or type `/idea 12` next time to skip this step.",
+            content: "I didn't catch a number there. Reply with just a digit like `12`, or type `/idea 12` next time to skip this step.",
             createdAt: Date.now(),
           };
           setMessages((prev) => [...prev, userMsg, retryMsg]);
@@ -623,7 +623,7 @@ export function ContentLabNerdChat({
                   ),
                 );
               } else if (chunk.type === 'conversation' && typeof chunk.conversationId === 'string') {
-                // First chunk of a brand-new conversation — server assigned the id.
+                // First chunk of a brand-new conversation, server assigned the id.
                 // Persist it so we resume next time the lab reopens for this client.
                 setConversationId(chunk.conversationId);
                 writeContentLabNerdConversationId(clientId, chunk.conversationId);
@@ -662,7 +662,7 @@ export function ContentLabNerdChat({
     setFormatVideoId(null);
     clearContentLabNerdConversationId(clientId);
     sessionHintRef.current = portalMode ? PORTAL_SESSION_HINT : ADMIN_SESSION_HINT;
-    // Ask the picker to refetch the list — the current thread may no longer
+    // Ask the picker to refetch the list, the current thread may no longer
     // be the latest, and a brand-new one is about to start.
     setConversationsRefreshToken((t) => t + 1);
   }
@@ -786,7 +786,7 @@ export function ContentLabNerdChat({
   return (
     <div className="flex h-full min-h-0 flex-1 overflow-hidden bg-background">
       {/* Left rail: conversation history + saved artifacts for this client.
-          Sits flush against the primary app sidebar now — the old rounded
+          Sits flush against the primary app sidebar now, the old rounded
           card container was removed so the chat spans the viewport. */}
       <ContentLabConversationHistoryRail
         clientId={clientId}
@@ -855,7 +855,7 @@ export function ContentLabNerdChat({
           {chatFooter}
         </>
       ) : messages.length === 0 ? (
-        // Pre-chat state — hero + centered composer, matching Topic Search.
+        // Pre-chat state, hero + centered composer, matching Topic Search.
         // Composer drops to the bottom as soon as the first message arrives.
         <div className="flex flex-1 flex-col items-center justify-center px-4 py-10 md:px-8">
           <div className="flex w-full max-w-3xl flex-col items-center">
