@@ -1,0 +1,94 @@
+# Progress: cup-02-ops-notifications
+# Read tasks/ralph/CONTEXT.md + tasks/ralph/cup-02-ops-notifications/PRD.md before each task.
+# Update this file after each task. One task per iteration.
+# Depends on cup-01 T06 (handoff route exists) for T08 wiring.
+
+[ ] T01: Confirm notifications table + lib/notifications.ts shape
+    Files: (read-only) lib/notifications.ts, supabase/migrations/
+    Acceptance: confirm `notifications` table has user_id, type (text), payload (jsonb), link, read_at; confirm createNotification signature; confirm whether type is enum-backed or free text. Note in progress whether migration 320 needs to extend an enum.
+    Verify: Supabase MCP list_tables notifications; grep "createNotification" lib/notifications.ts
+    Notes:
+
+[ ] T02: Author migration 320_smm_review_routing.sql
+    Files: supabase/migrations/320_smm_review_routing.sql
+    Acceptance: ALTER TABLE clients adds smm_reviewer_user_id uuid REFERENCES users(id) ON DELETE SET NULL. ALTER TABLE content_drops adds last_smm_review_notified_at timestamptz. If notifications.type is enum-backed, ALTER TYPE adds 'drop_smm_review_ready'.
+    Verify: `grep -c "smm_reviewer_user_id\|last_smm_review_notified_at" supabase/migrations/320_smm_review_routing.sql` returns 2
+    Notes:
+
+[ ] T03: Apply migration 320 via Supabase MCP
+    Files: (Supabase MCP) apply_migration name="320_smm_review_routing"
+    Acceptance: applies clean; both columns visible via list_tables
+    Verify: Supabase MCP execute_sql `SELECT column_name FROM information_schema.columns WHERE table_name IN ('clients','content_drops') AND column_name IN ('smm_reviewer_user_id','last_smm_review_notified_at')` returns both
+    Notes:
+
+[ ] T04: Build lib/social/slack-webhook.ts generic helper
+    Files: lib/social/slack-webhook.ts
+    Acceptance: exports postOpsSlack({ webhookUrl, text, blocks }) -> { ok, error? }. Uses fetch with 5s timeout. Never throws. Returns { ok: false, error } on non-2xx or network error. Typed SlackBlock minimal subset (section, button, divider).
+    Verify: `npx tsc --noEmit && npm run lint`
+    Notes:
+
+[ ] T05: Unit-test lib/social/slack-webhook.ts
+    Files: lib/social/slack-webhook.test.ts
+    Acceptance: mocks fetch; covers 200 ok, 401 error, network throw → swallow, payload-shape assertion.
+    Verify: `npx vitest run lib/social/slack-webhook.test.ts`
+    Notes:
+
+[ ] T06: Build lib/calendar/notify-smm-review.ts dispatcher
+    Files: lib/calendar/notify-smm-review.ts
+    Acceptance: exports notifySmmReviewReady(admin, { dropId, actorUserId, note? }) implementing the dispatcher per PRD: load drop + client + post count + date range, resolve recipients (clients.smm_reviewer_user_id ?? env list), createNotification per recipient with type 'drop_smm_review_ready' + payload + link, optional Slack post when env enabled and digest mode off, stamp last_smm_review_notified_at. 60s dedup with rejection-bypass logic per PRD edge cases.
+    Verify: `npx tsc --noEmit && npm run lint`
+    Notes:
+
+[ ] T07: Unit-test lib/calendar/notify-smm-review.ts
+    Files: lib/calendar/notify-smm-review.test.ts
+    Acceptance: mocks supabase + fetch + env; covers happy path, Slack failure does not throw, dedup window honoured, dedup bypassed on rejection-then-resubmit, recipients-empty case.
+    Verify: `npx vitest run lib/calendar/notify-smm-review.test.ts`
+    Notes:
+
+[ ] T08: Wire notifySmmReviewReady into cup-01 handoff route
+    Files: app/api/calendar/drops/[id]/handoff/route.ts (depends on cup-01 T06)
+    Acceptance: after the state-flip db write commits, await notifySmmReviewReady(); on any thrown error, log + continue (do not 5xx). Include the dispatcher's return object in the response under `notify` for debugging.
+    Verify: `npx tsc --noEmit && npm run lint`; e2e: press handoff in dev, verify a notifications row appears with the right type
+    Notes:
+
+[ ] T09: Build components/notifications/drop-smm-review-row.tsx
+    Files: components/notifications/drop-smm-review-row.tsx
+    Acceptance: renders notification per PRD copy + tokens; onRead handler wired; mobile-safe.
+    Verify: `npx tsc --noEmit && npm run lint`
+    Notes:
+
+[ ] T10: Register row renderer in notification dropdown
+    Files: components/notifications/notification-dropdown.tsx (confirm path via grep first)
+    Acceptance: 'drop_smm_review_ready' type maps to the new row component in the renderer switch/map.
+    Verify: `npx tsc --noEmit && npm run lint`; visual QA: fire a handoff, open the bell, see the row
+    Notes:
+
+[ ] T11: Build app/api/cron/smm-review-digest/route.ts
+    Files: app/api/cron/smm-review-digest/route.ts
+    Acceptance: GET handler with Bearer CRON_SECRET auth (per existing cron pattern). When SMM_REVIEW_DIGEST_MODE !== 'on', returns { digestSent: false, dropCount: 0, orgCount: 0 }. When on, groups awaiting drops by org, posts one Slack message per org, updates last_smm_review_notified_at. Wrapped in withCronTelemetry if available.
+    Verify: `npx tsc --noEmit && npm run lint`; manual curl with bearer in dev
+    Notes:
+
+[ ] T12: Register the cron in vercel.json
+    Files: vercel.json
+    Acceptance: new entry `{ "path": "/api/cron/smm-review-digest", "schedule": "0 14 * * *" }` (09:00 CT winter; document DST). No regression to existing crons.
+    Verify: `cat vercel.json | jq .crons` shows the entry
+    Notes:
+
+[ ] T13: Add env vars to .env.example
+    Files: .env.example
+    Acceptance: SLACK_OPS_WEBHOOK_URL, SLACK_OPS_WEBHOOK_ENABLED, SMM_REVIEW_DIGEST_MODE all present with one-line comments matching PRD Env Vars section.
+    Verify: `grep -c "SLACK_OPS_WEBHOOK_URL\|SLACK_OPS_WEBHOOK_ENABLED\|SMM_REVIEW_DIGEST_MODE" .env.example` returns 3
+    Notes:
+
+[ ] T14: Cron unit test
+    Files: app/api/cron/smm-review-digest/route.test.ts
+    Acceptance: off-mode no-ops, on-mode groups by org + writes timestamp, auth required.
+    Verify: `npx vitest run app/api/cron/smm-review-digest`
+    Notes:
+
+[ ] T15: Done When gate
+    Files: (none)
+    Acceptance: every bullet in PRD Done When passes; tsc + lint clean; manual Slack test if webhook configured
+    Verify: `npx tsc --noEmit && npm run lint`
+    Notes:
