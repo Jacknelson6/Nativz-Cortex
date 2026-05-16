@@ -51,6 +51,14 @@ vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: () => buildAdminClient(),
 }));
 
+const notifyMock = vi.hoisted(() =>
+  vi.fn().mockResolvedValue({ inAppNotified: 1, slackPosted: false }),
+);
+
+vi.mock('@/lib/calendar/notify-smm-review', () => ({
+  notifySmmReviewReady: notifyMock,
+}));
+
 function buildAdminClient() {
   return {
     from(table: FromTable) {
