@@ -1,5 +1,5 @@
 /**
- * CUP-01 editor handoff gate — full state-machine E2E.
+ * CUP-01 editor handoff gate - full state-machine E2E.
  *
  * Drives one drop through editing -> smm_review -> smm_approved -> client_sent
  * via the real route handlers (signed-in admin session, no mocks), then asserts
@@ -140,7 +140,7 @@ test('CUP-01 editor handoff: editing -> smm_review -> smm_approved -> client_sen
       expect((row?.handoff_history as unknown[])?.length ?? 0).toBe(1);
     }
 
-    // 2) SMM approves (no mint+send yet — we want to verify each step
+    // 2) SMM approves (no mint+send yet; we want to verify each step
     //    leaves its own history entry).
     const approveRes = await page.request.post(
       `/api/calendar/drops/${seeded.dropId}/handoff/approve`,

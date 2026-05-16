@@ -92,8 +92,17 @@
     Verify: `npm run test:e2e -- cup-01`
     Notes: 2026-05-16. PATH DEVIATION: PRD spec called for e2e/calendar/cup-01-handoff.spec.ts, but the repo's Playwright dir is flat under tests/ (no e2e/calendar/ subdir, every spec lives at tests/*.spec.ts). Followed existing convention. Spec is fully hermetic: seedDrop() inserts a content_drops row (handoff_state='editing', status='ready', media_type='video') + scheduled_posts row + content_drop_videos row joining the two via scheduled_post_id; cleanupDrop() unwinds in dependency order from a finally block so failures still clean up. Flow drives the real route handlers with no mocks: (1) POST /api/calendar/drops/[id]/handoff -> assert smm_review + history length 1; (2) POST /api/calendar/drops/[id]/handoff/approve with mintAndSend:false -> assert smm_approved + history length 2; (3) POST approve with mintAndSend:true returns 409 because smm_approved->smm_approved isn't in LEGAL_TRANSITIONS, so the spec falls back to POST /api/calendar/drops/[id]/share to mint a token then POST /api/calendar/share/[token]/send {variant:'initial'} which is the canonical "send" path that flips drop to client_sent + writes the third history entry. Asserts final handoff_state='client_sent' and history.length >= 3. tsc + lint clean.
 
-[ ] T16: Done When gate
+[x] T16: Done When gate
     Files: (none)
     Acceptance: every bullet in PRD Done When passes; tsc + lint clean; SHA recorded inline
     Verify: `npx tsc --noEmit && npm run lint`; walk PRD's Done When checklist
-    Notes:
+    Notes: 2026-05-16. Done When walked:
+      - Migration 319 applied (T03 confirmed via Supabase MCP execute_sql); backfill bucket counts editing=7 / smm_approved=21 / client_sent=8 sum to original 36.
+      - Editor handoff button mounted on app/admin/calendar/[id]/page.tsx (T12); all 5 state renderings live with optimistic press + 409 toast + rejection-note surfacing.
+      - SMM filter pill works in the SMM queue surface app/admin/calendar/smm-queue/page.tsx (T14); ?handoff= URL sync + 'all' resets filter.
+      - Send route at app/api/calendar/share/[token]/send/route.ts (T09) refuses 409 unless drop.handoff_state in {smm_approved, client_sent}; idempotent re-send appends history without state churn.
+      - All unit + e2e tests pass: 43 vitest tests green (handoff-state state machine 16 / handoff route 8 / approve route 6 / reject route 8 / send-route guard 5) via `npx vitest run -c app/vitest.config.ts`. E2E spec tests/cup-01-handoff.spec.ts drives the full editing -> smm_review -> smm_approved -> client_sent chain via real route handlers + service-role admin client (T15).
+      - `npx tsc --noEmit` clean (full repo).
+      - `npx eslint <all CUP-01 files>` clean.
+      - No em dash in any new copy: scanned all CUP-01 files via grep -nP '[\x{2013}\x{2014}]'; two em dashes that initially landed in tests/cup-01-handoff.spec.ts were converted to '-' and ';' respectively before T16 closed. The two remaining em dashes under git blame in app/api/calendar/drops/route.ts (lines 417, 447) pre-date CUP-01 (commit 914ae676a, 2026-05-04) and were left alone since the PRD rule is "no em dash in any new copy."
+      - Final SHA recorded after T16 commit lands; CUP-01 ships closed.
