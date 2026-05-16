@@ -334,17 +334,17 @@ function SharedReviewView({
         }
 
         if (json.state === 'gateway') {
+          // View is fully open. We capture any persisted guest name so a
+          // returning commenter doesn't get re-prompted, and stash the
+          // agency-context flags for when the gateway is later triggered
+          // on-demand (e.g. when the visitor clicks into the composer).
           const guest =
             readGuestName(token) ||
             (typeof window !== 'undefined'
               ? window.localStorage.getItem(legacyStorageKey)?.trim() ?? ''
               : '');
-          if (guest) {
-            setAuthorName(guest);
-            setGatewayOpen(false);
-          } else {
-            setGatewayOpen(true);
-          }
+          if (guest) setAuthorName(guest);
+          setGatewayOpen(false);
           setGatewayInfo({
             agencyMismatch: !!json.agencyMismatch,
             agencyAvailable: !!json.agencyAvailable,
@@ -352,17 +352,16 @@ function SharedReviewView({
           return;
         }
       } catch {
+        // Identity probe failure is non-fatal. Restore any persisted guest
+        // name so a returning commenter keeps their attribution, but never
+        // pop the modal on mount, viewing stays open for anyone with the
+        // link.
         if (typeof window !== 'undefined') {
           const guest =
             readGuestName(token) ||
             window.localStorage.getItem(legacyStorageKey)?.trim() ||
             '';
-          if (guest) {
-            setAuthorName(guest);
-            setGatewayOpen(false);
-          } else {
-            setGatewayOpen(true);
-          }
+          if (guest) setAuthorName(guest);
         }
       }
     })();
