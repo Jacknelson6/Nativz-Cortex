@@ -44,11 +44,11 @@
     Verify: `npx tsc --noEmit && npm run lint`
     Notes: 2026-05-16. POST handler. Zod schema parses note (<=500), mintAndSend (default false), clientMessage (<=2000). Auth: createServerSupabaseClient + getUserAuth; gates admin OR super_admin (TODO inline to switch admin->permissions.calendar.approve once a granular permissions table exists). Loads drop with clients(agency); 404 if missing. Refuses 409 unless current handoff_state === 'smm_review' with friendly hint per starting state. Flips state to smm_approved + appends history (actor=user.id, optional note). Early return on !mintAndSend. mintAndSend path: pulls posts via content_drop_videos.scheduled_post_id, refuses 409 on zero posts, inserts post_review_links rows, builds reviewMap, calls mintOrRefreshShareLink, then flips state to client_sent with second history entry (note prefers clientMessage > note > default). Response in mintAndSend mode includes shareLink {id, token, expires_at, url, refreshed}. Email send itself is intentionally deferred to the existing POST /api/calendar/share/[token]/send route (412-line email pipeline) so CUP-03 UI invokes it sequentially after this returns the token. tsc + lint both clean on new file.
 
-[ ] T08: Create POST /api/calendar/drops/[id]/handoff/reject route
+[x] T08: Create POST /api/calendar/drops/[id]/handoff/reject route
     Files: app/api/calendar/drops/[id]/handoff/reject/route.ts
     Acceptance: Zod schema for { note: string (min 1, max 2000), targetState: 'editing' | 'smm_rejected' (default 'smm_rejected') }. Validates current state is smm_review OR smm_approved. Flips state, appends history. Returns 409 if state is client_sent.
     Verify: `npx tsc --noEmit && npm run lint`
-    Notes:
+    Notes: 2026-05-16. POST handler. Zod requires non-empty note (max 2000), optional targetState enum defaulting to smm_rejected. Auth via createServerSupabaseClient + isAdmin (admin role). Refuses 409 unless current state is smm_review OR smm_approved with friendly hint per starting state (client_sent says "already sent to client", editing says "editor hasn't handed off yet"). canTransition() is a second guard so smm_approved->editing and smm_review->editing both pass through cleanly (both are listed in LEGAL_TRANSITIONS from T04). Note is always required so SMM has to leave a reason for the editor. tsc + lint clean.
 
 [ ] T09: Wire precondition guard into app/api/calendar/share/[token]/send/route.ts
     Files: app/api/calendar/share/[token]/send/route.ts
