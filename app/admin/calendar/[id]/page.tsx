@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, use } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -153,6 +154,16 @@ function hasOutstandingRevision(
 
 export default function DropDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const searchParams = useSearchParams();
+  const returnTo = searchParams?.get('return');
+  const shareTokenParam = searchParams?.get('shareToken');
+  const isReturnReview = returnTo === 'review';
+  const backHref = isReturnReview
+    ? shareTokenParam
+      ? `/admin/calendar/review/${shareTokenParam}`
+      : `/admin/calendar/review/drop/${id}`
+    : '/admin/calendar';
+  const backLabel = isReturnReview ? 'Back to review' : 'Calendar';
   const [data, setData] = useState<DropResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [scheduling, setScheduling] = useState(false);
@@ -314,10 +325,10 @@ export default function DropDetailPage({ params }: { params: Promise<{ id: strin
           <XCircle className="mx-auto mb-3 h-8 w-8 text-text-tertiary" />
           <p className="text-sm text-text-secondary">Content calendar not found.</p>
           <Link
-            href="/admin/calendar"
+            href={backHref}
             className="mt-3 inline-flex items-center gap-1 text-sm text-accent-text hover:underline"
           >
-            <ArrowLeft size={14} /> Back to calendar
+            <ArrowLeft size={14} /> {isReturnReview ? backLabel : 'Back to calendar'}
           </Link>
         </div>
       </div>
@@ -337,10 +348,10 @@ export default function DropDetailPage({ params }: { params: Promise<{ id: strin
   return (
     <div className="cortex-page-gutter max-w-6xl mx-auto space-y-6">
       <Link
-        href="/admin/calendar"
+        href={backHref}
         className="inline-flex items-center gap-1 text-sm text-text-secondary hover:text-text-primary"
       >
-        <ArrowLeft size={14} /> Calendar
+        <ArrowLeft size={14} /> {backLabel}
       </Link>
 
       <header className="flex flex-wrap items-start justify-between gap-4">

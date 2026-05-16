@@ -40,11 +40,11 @@
     Verify: `npx tsc --noEmit && npm run lint`
     Notes: 2026-05-16. Per T01/T02 decision NOT a wrapper around the share-link PostCard (5733-line monolith). Built as a review-specific compact list instead. Exports ReviewPost { id, title, caption, scheduledAt, coverImageUrl, commentCount } and PostListWithEdit({ dropId, posts, editorBasePath? }). Each li is `id=post-<id>` so the Edit chip can deep-link via hash. Cover thumb uses next/image with `unoptimized` (avoids the Vercel image-loader config). Edit chip is a Link to `<editorBasePath>?return=review&dropId=<id>&postId=<id>#post-<id>` — T07 reads `return=review` to route the save action back to the review surface. Layout: 80x80 cover thumb on the left, title/scheduled-time/comment-count row + 3-line clamp caption preview on the right. Empty state covered with a dashed border. Sentence case throughout, no em/en dashes, tokens (bg-surface, border-nativz-border, text-text-*). tsc + lint clean.
 
-[ ] T07: Honour ?return=review in the existing post editor
-    Files: <post editor route; confirm path during build, likely under app/admin/calendar/>
+[x] T07: Honour ?return=review in the existing post editor
+    Files: app/admin/calendar/[id]/page.tsx
     Acceptance: when query param `return=review` is present, the save action routes back to `/admin/calendar/review/drop/[id]` (or `/[token]` if shareToken query also present). No regression for default callers.
     Verify: `npx tsc --noEmit && npm run lint`; manual: open editor with query param, save, land back on review
-    Notes:
+    Notes: 2026-05-16. The "post editor" in this repo is the drop detail page at app/admin/calendar/[id]/page.tsx — it manages all posts in the drop inline (no separate per-post editor route). The page autosaves on edit rather than having an explicit Save action, so the practical hook for "land back on review" is the existing Back link in the header (used twice: once in the not-found state, once in the live header). Added `useSearchParams()` and derived `backHref` + `backLabel`: when `return=review` is present, backHref points at `/admin/calendar/review/drop/<id>` (default) or `/admin/calendar/review/<shareToken>` when shareToken is also present, and the label becomes "Back to review". Default callers (no query param) see the unchanged `/admin/calendar` + "Calendar" copy, so zero regression for the existing flow. The Edit chip from T06 already passes `?return=review&dropId=<id>&postId=<id>`, so this closes the loop. tsc + lint clean.
 
 [ ] T08: Create app/admin/calendar/review/drop/[id]/page.tsx
     Files: app/admin/calendar/review/drop/[id]/page.tsx
