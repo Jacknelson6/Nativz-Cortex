@@ -1,0 +1,88 @@
+# Progress: cup-03-smm-review-surface
+# Read tasks/ralph/CONTEXT.md + tasks/ralph/cup-03-smm-review-surface/PRD.md before each task.
+# Update this file after each task. One task per iteration.
+# Depends on cup-01 routes existing (approve/reject/handoff) for the UI to call.
+
+[ ] T01: Locate existing share-link post list renderer
+    Files: (read-only) app/calendar/share/[token]/, app/c/[token]/, components/calendar/
+    Acceptance: identify the component that renders the public share-link post stack (used by the client) and confirm it accepts data props decoupled from share-link tokens. Note its path + prop shape in this Notes field; flag if a refactor is needed to accept the optional "edit slot" prop.
+    Verify: `grep -rn "post_review_links\|share-link.*post" components/ app/ | head`
+    Notes:
+
+[ ] T02: Add optional editSlot prop to the share-link post list component
+    Files: <component identified in T01>
+    Acceptance: optional `editSlot?: (post: Post) => ReactNode` prop forwarded to each card slot; default null preserves current public render. No regression in existing share-link consumer.
+    Verify: `npx tsc --noEmit && npm run lint`; smoke check the public share-link page in dev renders identically
+    Notes:
+
+[ ] T03: Build components/calendar/review/review-header.tsx
+    Files: components/calendar/review/review-header.tsx
+    Acceptance: renders client name + post count + date range + state pill + editor note quote + collapsible history per PRD UI Components. Sentence case. No em dash. Tokens correct.
+    Verify: `npx tsc --noEmit && npm run lint`
+    Notes:
+
+[ ] T04: Build components/calendar/review/approve-and-send-bar.tsx
+    Files: components/calendar/review/approve-and-send-bar.tsx
+    Acceptance: client component. Mobile: fixed bottom bar with safe-area padding, three buttons. Desktop: right-rail vertical stack. Disabled state during in-flight. Renders resend variant when state is client_sent. All copy sentence case.
+    Verify: `npx tsc --noEmit && npm run lint`
+    Notes:
+
+[ ] T05: Build components/calendar/review/reject-dialog.tsx
+    Files: components/calendar/review/reject-dialog.tsx
+    Acceptance: modal (bottom sheet on mobile via existing dialog primitive). Textarea required, max 2000. Send button disabled until note has content. Calls cup-01 reject route on submit.
+    Verify: `npx tsc --noEmit && npm run lint`
+    Notes:
+
+[ ] T06: Build components/calendar/review/post-list-with-edit.tsx
+    Files: components/calendar/review/post-list-with-edit.tsx
+    Acceptance: thin wrapper around the share-link post list component; passes editSlot that renders an "Edit" chip linking to the existing post editor with `?return=review&dropId=<id>`. No new card UI.
+    Verify: `npx tsc --noEmit && npm run lint`
+    Notes:
+
+[ ] T07: Honour ?return=review in the existing post editor
+    Files: <post editor route; confirm path during build, likely under app/admin/calendar/>
+    Acceptance: when query param `return=review` is present, the save action routes back to `/admin/calendar/review/drop/[id]` (or `/[token]` if shareToken query also present). No regression for default callers.
+    Verify: `npx tsc --noEmit && npm run lint`; manual: open editor with query param, save, land back on review
+    Notes:
+
+[ ] T08: Create app/admin/calendar/review/drop/[id]/page.tsx
+    Files: app/admin/calendar/review/drop/[id]/page.tsx
+    Acceptance: server component. Loads content_drops + handoff_state + scheduled_posts via createAdminClient. Renders ReviewHeader + PostListWithEdit + ApproveAndSendBar (state-aware). Admin auth check at top; non-admin gets 403 page. Refuses to render if state is client_sent (redirect to the /[token] variant when share-link exists).
+    Verify: `npx tsc --noEmit && npm run lint`; visual QA in dev on a real drop in smm_review
+    Notes:
+
+[ ] T09: Create app/admin/calendar/review/[token]/page.tsx
+    Files: app/admin/calendar/review/[token]/page.tsx
+    Acceptance: server component. Loads content_drop_share_links + linked drop + posts via included_post_ids. Renders the same shell as T08 but with state pinned to smm_approved or client_sent. ResendBar variant active when client_sent.
+    Verify: `npx tsc --noEmit && npm run lint`
+    Notes:
+
+[ ] T10: Update cup-02 notification + Slack message to use correct review URL
+    Files: lib/calendar/notify-smm-review.ts (depends on cup-02 T06)
+    Acceptance: pre-approval notifications link to `/admin/calendar/review/drop/[id]`. Post-approval notifications (resend, etc.) link to `/admin/calendar/review/[token]`.
+    Verify: `npx tsc --noEmit && npm run lint`
+    Notes:
+
+[ ] T11: Component unit tests
+    Files: components/calendar/review/approve-and-send-bar.test.tsx, components/calendar/review/reject-dialog.test.tsx
+    Acceptance: bar renders correct CTAs per state, click handlers fire, disabled while in-flight, mobile vs desktop snapshot. Reject dialog requires note, send disabled until note has content, success closes.
+    Verify: `npx vitest run components/calendar/review`
+    Notes:
+
+[ ] T12: E2E Playwright: full flow from handoff to client_sent through review surface
+    Files: e2e/calendar/cup-03-review.spec.ts
+    Acceptance: editor presses handoff -> SMM opens /admin/calendar/review/drop/[id] -> rejects with note -> editor sees rejection pill on drop detail -> editor re-submits -> SMM approves and sends -> page transitions to resend variant. Uses seed fixture data.
+    Verify: `npm run test:e2e -- cup-03`
+    Notes:
+
+[ ] T13: Mobile viewport visual QA (375px)
+    Files: (none; manual via dev server)
+    Acceptance: review page on 375x812 viewport: ApproveAndSendBar pinned at bottom, not obscured by post cards; safe-area-inset honoured; no horizontal scroll
+    Verify: dev server + browser devtools at 375x812; screenshot
+    Notes:
+
+[ ] T14: Done When gate
+    Files: (none)
+    Acceptance: every bullet in PRD Done When passes; tsc + lint clean; SHA recorded inline
+    Verify: `npx tsc --noEmit && npm run lint`; walk PRD Done When
+    Notes:
