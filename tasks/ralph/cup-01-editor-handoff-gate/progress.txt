@@ -14,11 +14,11 @@
     Verify: `grep -c "CREATE TYPE drop_handoff_state\|ADD COLUMN handoff_state\|content_drops_smm_review_idx" supabase/migrations/319_drop_handoff_state.sql` returns 3
     Notes: 2026-05-16. Wrote 319_drop_handoff_state.sql. Used DO $$ BEGIN ... CREATE TYPE ... EXCEPTION WHEN duplicate_object THEN NULL; END $$ for enum idempotence, ADD COLUMN IF NOT EXISTS for the two columns, CREATE INDEX IF NOT EXISTS for the partial index. Backfill guarded with `WHERE cd.handoff_state = 'editing'` to avoid clobbering already-stamped rows on reruns. Confirmed content_drop_share_links.first_sent_at exists (used by backfill).
 
-[ ] T03: Apply migration 319 via Supabase MCP
+[x] T03: Apply migration 319 via Supabase MCP
     Files: (Supabase MCP) apply_migration name="319_drop_handoff_state"
     Acceptance: migration applies clean; `list_tables content_drops` shows handoff_state + handoff_history columns; backfill stamped legacy rows
     Verify: Supabase MCP execute_sql `SELECT handoff_state, count(*) FROM content_drops GROUP BY handoff_state` returns sane bucket counts
-    Notes:
+    Notes: 2026-05-16. Applied via Supabase MCP. Bucket counts: editing=7, smm_approved=21, client_sent=8 (=36 total matching pre-migration row count). No smm_review / smm_rejected as expected (those only exist post-migration). Backfill behaviour correct: sent share links -> client_sent, minted-but-unsent -> smm_approved, no share link -> editing default.
 
 [ ] T04: Create lib/calendar/handoff-state.ts state machine helper
     Files: lib/calendar/handoff-state.ts
