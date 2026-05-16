@@ -38,11 +38,11 @@
     Verify: `npx tsc --noEmit && npm run lint`
     Notes: 2026-05-16. POST handler. Zod-parses optional note (max 500). Auth via createServerSupabaseClient + isAdmin. Loads drop with admin client; 404 if missing. Uses canTransition() so editing->smm_review and smm_rejected->smm_review pass while everything else returns 409 with handoff_state + hint. Resolves posts via content_drop_videos.scheduled_post_id (no content_drop_id column on scheduled_posts) and refuses on 0 posts or all-published. tsc + lint clean. No pre-existing lint errors introduced.
 
-[ ] T07: Create POST /api/calendar/drops/[id]/handoff/approve route
+[x] T07: Create POST /api/calendar/drops/[id]/handoff/approve route
     Files: app/api/calendar/drops/[id]/handoff/approve/route.ts
     Acceptance: Zod schema for { note?, mintAndSend: boolean (default false), clientMessage? }. Admin auth + permission check (super_admin always; admin if permissions.calendar.approve OR if permissions table missing, gate by super_admin only with TODO). Validates state === 'smm_review'. Flips to smm_approved. When mintAndSend=true, calls mintOrRefreshShareLink + the existing send routine + flips to client_sent. Returns { drop, shareLink? }.
     Verify: `npx tsc --noEmit && npm run lint`
-    Notes:
+    Notes: 2026-05-16. POST handler. Zod schema parses note (<=500), mintAndSend (default false), clientMessage (<=2000). Auth: createServerSupabaseClient + getUserAuth; gates admin OR super_admin (TODO inline to switch admin->permissions.calendar.approve once a granular permissions table exists). Loads drop with clients(agency); 404 if missing. Refuses 409 unless current handoff_state === 'smm_review' with friendly hint per starting state. Flips state to smm_approved + appends history (actor=user.id, optional note). Early return on !mintAndSend. mintAndSend path: pulls posts via content_drop_videos.scheduled_post_id, refuses 409 on zero posts, inserts post_review_links rows, builds reviewMap, calls mintOrRefreshShareLink, then flips state to client_sent with second history entry (note prefers clientMessage > note > default). Response in mintAndSend mode includes shareLink {id, token, expires_at, url, refreshed}. Email send itself is intentionally deferred to the existing POST /api/calendar/share/[token]/send route (412-line email pipeline) so CUP-03 UI invokes it sequentially after this returns the token. tsc + lint both clean on new file.
 
 [ ] T08: Create POST /api/calendar/drops/[id]/handoff/reject route
     Files: app/api/calendar/drops/[id]/handoff/reject/route.ts
