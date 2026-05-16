@@ -9,6 +9,7 @@ import {
   type HandoffHistoryEntry,
   type HandoffState,
 } from '@/lib/calendar/handoff-state';
+import { notifySmmReviewReady } from '@/lib/calendar/notify-smm-review';
 
 const RequestSchema = z.object({
   note: z.string().max(500).optional(),
@@ -135,8 +136,15 @@ export async function POST(
     );
   }
 
+  const notify = await notifySmmReviewReady(admin, {
+    dropId: id,
+    actorUserId: user.id,
+    ...(body.note ? { note: body.note } : {}),
+  });
+
   return NextResponse.json({
     drop: { id, handoff_state: targetState },
     history: newHistory,
+    notify,
   });
 }
