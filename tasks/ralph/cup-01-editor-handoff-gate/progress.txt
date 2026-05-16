@@ -50,11 +50,11 @@
     Verify: `npx tsc --noEmit && npm run lint`
     Notes: 2026-05-16. POST handler. Zod requires non-empty note (max 2000), optional targetState enum defaulting to smm_rejected. Auth via createServerSupabaseClient + isAdmin (admin role). Refuses 409 unless current state is smm_review OR smm_approved with friendly hint per starting state (client_sent says "already sent to client", editing says "editor hasn't handed off yet"). canTransition() is a second guard so smm_approved->editing and smm_review->editing both pass through cleanly (both are listed in LEGAL_TRANSITIONS from T04). Note is always required so SMM has to leave a reason for the editor. tsc + lint clean.
 
-[ ] T09: Wire precondition guard into app/api/calendar/share/[token]/send/route.ts
+[x] T09: Wire precondition guard into app/api/calendar/share/[token]/send/route.ts
     Files: app/api/calendar/share/[token]/send/route.ts
     Acceptance: at top of POST handler (after auth + share-link load), load `content_drops.handoff_state` for the linked drop. Refuse with 409 + `{ error, handoff_state, hint }` unless state in (smm_approved, client_sent). After successful send, append history + set handoff_state = client_sent (idempotent).
     Verify: `npx tsc --noEmit && npm run lint`. Manual: hit the route with curl on a drop in 'editing' state, expect 409.
-    Notes:
+    Notes: 2026-05-16. Threaded handoff_state + handoff_history through loadSendContext: extended DropRow type, expanded the .select(), returned `drop` in the context tuple. In POST, before the recipient-filtering block, refuse with 409 + { error, handoff_state, hint } unless drop.handoff_state is 'smm_approved' OR 'client_sent'. Friendly hint per starting state (editing/smm_review/smm_rejected). After the share_links stamp succeeds, write handoff_state = 'client_sent' + appendHistory (actor=userId, note='share-link send route stamped client_sent'). Idempotent branch when drop is already client_sent: just appends a history entry noting "re-send (idempotent)" and updates updated_at, no state-flip churn. Did not refactor logging per validator nudge - matched existing route's no-logging convention. tsc + lint clean.
 
 [ ] T10: Route-level unit tests for the 3 handoff routes + send-route guard
     Files: app/api/calendar/drops/[id]/handoff/route.test.ts, ...approve/route.test.ts, ...reject/route.test.ts, app/api/calendar/share/[token]/send/route.test.ts
