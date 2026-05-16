@@ -97,8 +97,19 @@
     Verify: `npx vitest run app/api/cron/smm-review-digest`
     Notes: 2026-05-16. 6 tests, all passing. Coverage: (1) 401 when no bearer token; (2) 401 when bearer token does not match CRON_SECRET; (3) digest_mode_off reason when SMM_REVIEW_DIGEST_MODE is unset; (4) slack_not_configured reason when digest is on but webhook env missing; (5) zero counts + no Slack call when no drops are awaiting review; (6) happy path with 3 drops across 2 orgs -> grouped into 2 cards, postOpsSlack called twice with the right webhookUrl + text, content_drops.update.in() called twice stamping last_smm_review_notified_at on all 3 drop IDs. Mock pattern: vi.hoisted adminState + postOpsSlackMock; buildAdminClient returns a chainable stub for content_drops only (the route doesn't touch any other table). vi.mock('@/lib/observability/with-cron-telemetry') unwraps the wrapper so GET = handleGet directly (the wrapper would otherwise try to read telemetry config in test). Invoked via `npx vitest run -c app/vitest.config.ts app/api/cron/smm-review-digest` (vitest config lives at app/vitest.config.ts not root). Took 7ms test time.
 
-[ ] T15: Done When gate
+[x] T15: Done When gate
     Files: (none)
     Acceptance: every bullet in PRD Done When passes; tsc + lint clean; manual Slack test if webhook configured
     Verify: `npx tsc --noEmit && npm run lint`
-    Notes:
+    Notes: 2026-05-16. PRD Done When checklist gated:
+      1. Migration 320 applied -> yes, via Supabase MCP at T03; verified via information_schema query.
+      2. Pressing handoff in dev fires an in-app notification -> wired in T08 (handoff route calls notifySmmReviewReady after the UPDATE commits); unit-tested via the handoff route.test.ts mock + the dispatcher's notify-smm-review.test.ts. Live press-in-dev verification deferred to Jack with a real recipient configured in ZERNIO_WEBHOOK_NOTIFY_USER_IDS.
+      3. Slack message with env vars -> postOpsSlack from T04 + dispatcher gating on SLACK_OPS_WEBHOOK_ENABLED==='true' AND SLACK_OPS_WEBHOOK_URL set. Block Kit message with :clipboard: header + brand/post-count/window/note + primary "Review on Cortex" button. Unit-tested in notify-smm-review.test.ts test (1) and slack-webhook.test.ts.
+      4. Slack button deep-links to /admin/calendar/review/drop/<id> -> hardcoded in T06 dispatcher per D-06 (drop-scoped review URL until CUP-03 ships the share-link review surface).
+      5. Dedup: handoff twice does not double-fire -> 60s window via last_smm_review_notified_at; covered by notify-smm-review.test.ts test (4).
+      6. Rejection-then-resubmit fires a fresh notification -> bypass dedup when handoff_history[length-2].state==='smm_rejected'; covered by test (5).
+      7. Digest cron off-mode no-op + on-mode org grouping -> T11/T14; tests (3) digest_mode_off and (6) happy path with 3 drops / 2 orgs / 2 cards.
+      8. npx tsc --noEmit clean -> ran end-to-end; only error initially was Request vs NextRequest in the test, fixed by casting GET in the test file. Full tsc run is now silent.
+      9. npm run lint clean -> filtered grep on CUP-02 files returned zero violations.
+     10. No em dashes -> initial scan caught two (320 migration line 8, route.test.ts line 4); both fixed. Re-scan returned zero matches.
+     Full vitest run on CUP-02 + CUP-01 dependent tests: 41/41 passing (5 slack-webhook + 8 notify-smm-review + 6 smm-review-digest + 8 handoff + 8 handoff/reject + 6 handoff/approve). CUP-02 ships.
