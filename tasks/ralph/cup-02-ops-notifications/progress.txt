@@ -19,11 +19,11 @@
       - email_sent boolean / email_sent_at timestamptz / created_at timestamptz
       createNotification helper lives at lib/notifications/create.ts. Signature: createNotification({ recipientUserId, type, title, body?, linkPath? }). Never throws (try/catch + console.error). A notification registry exists at lib/notifications/registry.ts with channels + per-client toggle support; new dispatcher in T06 should also register 'drop_smm_review_ready' there for consistency with existing entries. All subsequent CUP-02 tasks must use the correct columns (recipient_user_id / title / body / link_path / is_read), NOT the PRD's user_id/payload/link/read_at framing.
 
-[ ] T02: Author migration 320_smm_review_routing.sql
+[x] T02: Author migration 320_smm_review_routing.sql
     Files: supabase/migrations/320_smm_review_routing.sql
     Acceptance: ALTER TABLE clients adds smm_reviewer_user_id uuid REFERENCES users(id) ON DELETE SET NULL. ALTER TABLE content_drops adds last_smm_review_notified_at timestamptz. If notifications.type is enum-backed, ALTER TYPE adds 'drop_smm_review_ready'.
     Verify: `grep -c "smm_reviewer_user_id\|last_smm_review_notified_at" supabase/migrations/320_smm_review_routing.sql` returns 2
-    Notes:
+    Notes: 2026-05-16. Wrote 320_smm_review_routing.sql. Two ADD COLUMN IF NOT EXISTS statements: clients.smm_reviewer_user_id (uuid FK -> users(id) ON DELETE SET NULL) and content_drops.last_smm_review_notified_at (timestamptz, nullable). Added COMMENT ON COLUMN for both so the dispatcher contract is documented at the schema level. Skipped ALTER TYPE because T01 confirmed notifications.type is plain text. Added a partial index `clients_smm_reviewer_user_id_idx` on the new FK (WHERE smm_reviewer_user_id IS NOT NULL) since the dispatcher will lookup by client and most clients will leave it null, so the partial keeps the index small. grep -c returned 7 (the two column names appear in the ALTER + the COMMENT + the index def), comfortably above the acceptance threshold of 2.
 
 [ ] T03: Apply migration 320 via Supabase MCP
     Files: (Supabase MCP) apply_migration name="320_smm_review_routing"
