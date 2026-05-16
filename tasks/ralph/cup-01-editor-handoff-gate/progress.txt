@@ -8,11 +8,11 @@
     Verify: `grep -rn "from('content_drops')" app/ lib/ | head`; Supabase MCP `list_tables content_drops`
     Notes: 2026-05-16. content_drops exists, 36 rows, RLS on. Confirmed columns: id, client_id, created_by, status (enum: ingesting/analyzing/generating/ready/scheduled/failed), start_date, end_date, default_post_time, total_videos, processed_videos, media_type, strategist_id, editor_id, notes, pipeline_status (enum: editing/need_approval/revising/approved/done/archived), source. No handoff_state / handoff_history yet -> migration 319 will add them. Adjacent paths verified: lib/calendar/scheduling-rules.ts and lib/calendar/share-link.ts both exist. Latest applied migration is 318, so 319 is the next slot. Note: pipeline_status is a separate axis (PM lifecycle for editing-project pairing) and does NOT collide with the new handoff_state per PRD D-01/D-07. No refactor needed.
 
-[ ] T02: Author migration 319_drop_handoff_state.sql
+[x] T02: Author migration 319_drop_handoff_state.sql
     Files: supabase/migrations/319_drop_handoff_state.sql
     Acceptance: file contains the enum `drop_handoff_state` (5 values), ALTER TABLE adding handoff_state + handoff_history, the two UPDATE backfill blocks, the partial index. Matches PRD Data Model verbatim. Idempotent guards (IF NOT EXISTS, DROP TYPE IF EXISTS on the enum if rerunnable).
     Verify: `grep -c "CREATE TYPE drop_handoff_state\|ADD COLUMN handoff_state\|content_drops_smm_review_idx" supabase/migrations/319_drop_handoff_state.sql` returns 3
-    Notes:
+    Notes: 2026-05-16. Wrote 319_drop_handoff_state.sql. Used DO $$ BEGIN ... CREATE TYPE ... EXCEPTION WHEN duplicate_object THEN NULL; END $$ for enum idempotence, ADD COLUMN IF NOT EXISTS for the two columns, CREATE INDEX IF NOT EXISTS for the partial index. Backfill guarded with `WHERE cd.handoff_state = 'editing'` to avoid clobbering already-stamped rows on reruns. Confirmed content_drop_share_links.first_sent_at exists (used by backfill).
 
 [ ] T03: Apply migration 319 via Supabase MCP
     Files: (Supabase MCP) apply_migration name="319_drop_handoff_state"
