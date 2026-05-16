@@ -24,6 +24,7 @@
 import { test, expect } from '@playwright/test';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { loadEnvConfig } from '@next/env';
+import AxeBuilder from '@axe-core/playwright';
 import * as fs from 'fs';
 import * as path from 'path';
 import { signInAsAdmin } from './admin-login-helpers';
@@ -41,6 +42,7 @@ function adminClient(): SupabaseClient {
 
 interface TestData {
   clientId: string;
+  clientName: string;
   adminEmail: string;
   adminPassword: string;
   adminUserId: string;
@@ -162,9 +164,23 @@ test('CUP-03 SMM review: handoff -> reject -> resubmit -> approve -> send -> res
       expect(row?.handoff_state).toBe('smm_review');
     }
 
-    // 2) SMM opens the review surface and sees a 200 + the client name.
+    // 2) SMM opens the review surface. Two signals: HTTP 200 from the route
+    //    plus AOM assertions on the rendered page, so a 200-with-broken-data
+    //    regression (the cousin of the phantom-`revoked` bug we fixed) can't
+    //    slip through. The status check stays for fast-fail diagnostics.
     const reviewPage = await page.request.get(`/admin/calendar/review/drop/${seeded.dropId}`);
     expect(reviewPage.status(), 'review page should render in smm_review').toBe(200);
+    await page.goto(`/admin/calendar/review/drop/${seeded.dropId}`);
+    await expect(
+      page.getByRole('heading', { level: 1, name: data.clientName }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: /^approve$/i }).first(),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: /reject with note/i }).first(),
+    ).toBeVisible();
+    await expect(page.getByRole('heading', { level: 3, name: /cup-03\.mp4/ })).toBeVisible();
 
     // 3) SMM rejects with a note (targetState: smm_rejected).
     const rejectRes = await page.request.post(
@@ -243,9 +259,30 @@ test('CUP-03 SMM review: handoff -> reject -> resubmit -> approve -> send -> res
       expect(history.length).toBeGreaterThanOrEqual(4);
     }
 
-    // 7) Token route renders 200 in client_sent state (resend surface).
+    // 7) Token route renders in client_sent state (resend surface). Three
+    //    signals: HTTP 200, AOM-visible resend button + client heading,
+    //    and a clean axe-core a11y scan with no serious / critical
+    //    violations on the page a real client opens.
     const tokenPage = await page.request.get(`/admin/calendar/review/${token}`);
     expect(tokenPage.status(), 'token review page should render in client_sent').toBe(200);
+    await page.goto(`/admin/calendar/review/${token}`);
+    await expect(
+      page.getByRole('heading', { level: 1, name: data.clientName }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: /resend to client/i }).first(),
+    ).toBeVisible();
+
+    const axe = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa'])
+      .analyze();
+    const blocking = axe.violations.filter(
+      (v) => v.impact === 'serious' || v.impact === 'critical',
+    );
+    expect(
+      blocking,
+      `axe violations (${blocking.length}): ${blocking.map((v) => v.id).join(', ')}`,
+    ).toEqual([]);
 
     // 8) Resend uses variant=revised against the same token.
     const resendRes = await page.request.post(
