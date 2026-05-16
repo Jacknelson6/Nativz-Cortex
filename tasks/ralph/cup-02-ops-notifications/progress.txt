@@ -91,11 +91,11 @@
     Verify: `grep -c "SLACK_OPS_WEBHOOK_URL\|SLACK_OPS_WEBHOOK_ENABLED\|SMM_REVIEW_DIGEST_MODE" .env.example` returns 3
     Notes: 2026-05-16. Appended a CUP-02 block to the end of .env.example with all three vars + a multi-line comment explaining the toggle semantics (URL for Slack incoming webhook, ENABLED gates posting, DIGEST_MODE flips real-time vs daily rollup). All three lines commented out by default so a fresh checkout doesn't accidentally enable Slack posting before Jack configures the webhook URL. grep -c returned 6 (each var name appears in both the comment block and the commented-out assignment line) which is comfortably above the acceptance threshold of 3.
 
-[ ] T14: Cron unit test
+[x] T14: Cron unit test
     Files: app/api/cron/smm-review-digest/route.test.ts
     Acceptance: off-mode no-ops, on-mode groups by org + writes timestamp, auth required.
     Verify: `npx vitest run app/api/cron/smm-review-digest`
-    Notes:
+    Notes: 2026-05-16. 6 tests, all passing. Coverage: (1) 401 when no bearer token; (2) 401 when bearer token does not match CRON_SECRET; (3) digest_mode_off reason when SMM_REVIEW_DIGEST_MODE is unset; (4) slack_not_configured reason when digest is on but webhook env missing; (5) zero counts + no Slack call when no drops are awaiting review; (6) happy path with 3 drops across 2 orgs -> grouped into 2 cards, postOpsSlack called twice with the right webhookUrl + text, content_drops.update.in() called twice stamping last_smm_review_notified_at on all 3 drop IDs. Mock pattern: vi.hoisted adminState + postOpsSlackMock; buildAdminClient returns a chainable stub for content_drops only (the route doesn't touch any other table). vi.mock('@/lib/observability/with-cron-telemetry') unwraps the wrapper so GET = handleGet directly (the wrapper would otherwise try to read telemetry config in test). Invoked via `npx vitest run -c app/vitest.config.ts app/api/cron/smm-review-digest` (vitest config lives at app/vitest.config.ts not root). Took 7ms test time.
 
 [ ] T15: Done When gate
     Files: (none)
