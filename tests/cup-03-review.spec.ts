@@ -51,6 +51,20 @@ function getTestData(): TestData {
   return JSON.parse(fs.readFileSync(p, 'utf-8'));
 }
 
+async function seedContact(db: SupabaseClient, clientId: string): Promise<string> {
+  const { data, error } = await db
+    .from('contacts')
+    .insert({
+      client_id: clientId,
+      email: `test-recipient-${Date.now()}@test.nativz.io`,
+      name: 'Test Recipient',
+    })
+    .select('id')
+    .single();
+  if (error || !data) throw new Error(`seed contact failed: ${error?.message}`);
+  return data.id;
+}
+
 async function seedDrop(
   db: SupabaseClient,
   opts: { clientId: string; userId: string },
@@ -128,6 +142,7 @@ test('CUP-03 SMM review: handoff -> reject -> resubmit -> approve -> send -> res
   const db = adminClient();
 
   const seeded = await seedDrop(db, { clientId: data.clientId, userId: data.adminUserId });
+  const contactId = await seedContact(db, data.clientId);
 
   try {
     await signInAsAdmin(page, data.adminEmail, data.adminPassword);
@@ -240,5 +255,6 @@ test('CUP-03 SMM review: handoff -> reject -> resubmit -> approve -> send -> res
     expect(resendRes.status(), await resendRes.text()).toBe(200);
   } finally {
     await cleanupDrop(db, seeded.dropId, seeded.postId);
+    await db.from('contacts').delete().eq('id', contactId);
   }
 });

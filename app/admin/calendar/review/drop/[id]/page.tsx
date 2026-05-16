@@ -92,7 +92,7 @@ export default async function ReviewDropPage({
       .from('content_drop_share_links')
       .select('token')
       .eq('drop_id', id)
-      .eq('revoked', false)
+      .is('archived_at', null)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle<{ token: string }>();
