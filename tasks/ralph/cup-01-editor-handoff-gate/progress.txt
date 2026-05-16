@@ -74,11 +74,11 @@
     Verify: `npx tsc --noEmit && npm run lint`; visual QA in dev on a real drop row.
     Notes: 2026-05-16. Real path is app/admin/calendar/[id]/page.tsx (no /drops/ segment). Page is client-rendered ('use client' + useEffect fetch), so "server-side" framing meant: surface the existing GET /api/calendar/drops/[id] payload, which already selects '*' on content_drops — handoff_state + handoff_history flow through unchanged. Added HandoffState + HandoffHistoryEntry import to lib/types/calendar.ts and extended ContentDrop with the two new columns. Imported EditorHandoffButton into the detail page and rendered it inside the existing header right-rail cluster (after the Schedule/Share buttons). Added local latestRejectionNote(history) helper that walks the history array backwards to find the last smm_rejected entry's note, passed as rejectionNote prop so the red-tinted "SMM requested changes" card surfaces the actual reviewer feedback. tsc clean; lint clean for new files (199 pre-existing repo errors untouched).
 
-[ ] T13: Build components/calendar/drop-list-smm-filter.tsx
+[x] T13: Build components/calendar/drop-list-smm-filter.tsx
     Files: components/calendar/drop-list-smm-filter.tsx
     Acceptance: pill row "All / Awaiting SMM / Approved / Sent" mapping to handoff_state filter values. Uses existing filter-pill primitive if present (grep first); otherwise a minimal local wrapper.
     Verify: `npx tsc --noEmit && npm run lint`
-    Notes:
+    Notes: 2026-05-16. Grep confirmed no shared FilterPill primitive in components/ or lib/; built a self-contained 'use client' component (controlled, value/onChange API). Four pills mapped to DropListSmmFilterValue = 'all' | HandoffState ('smm_review' | 'smm_approved' | 'client_sent') -- editing + smm_rejected intentionally omitted since the PRD spec for the filter is the SMM-facing slice (awaiting their review / approved / sent), not the editor-side states. The 'all' option clears the filter. Tokens: bg-surface container + accent/15 active state + accent-text + surface-hover for inactive hover -- matches the CaptionTabButton primitive style used elsewhere on the drop detail page. role="tablist"/aria-selected for a11y. whitespace-nowrap on every pill. tsc + lint clean.
 
 [ ] T14: Wire DropListSmmFilter into app/admin/calendar/page.tsx
     Files: app/admin/calendar/page.tsx
