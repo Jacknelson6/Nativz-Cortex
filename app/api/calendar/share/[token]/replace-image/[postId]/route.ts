@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { isAdmin } from '@/lib/auth/permissions';
 import { uploadImageAsset } from '@/lib/calendar/storage-upload';
+import { requireAdminOnShare } from '@/lib/share/admin-gate';
+import { logShareAdminAction } from '@/lib/share/audit';
 
 /**
  * POST /api/calendar/share/[token]/replace-image/[postId]
@@ -17,14 +17,14 @@ import { uploadImageAsset } from '@/lib/calendar/storage-upload';
  *
  * Single-image posts only (the most common case from the calendar share
  * screen). Multi-asset carousels need a per-asset selector before we can
- * support them here — out of scope for the initial ship.
+ * support them here, out of scope for the initial ship.
  *
  * Request: multipart/form-data with a single `file` field (JPEG/PNG/WebP).
  * Response: 200 { url } on success.
  */
 
 const ALLOWED_IMAGE_PREFIXES = ['image/'];
-const MAX_BYTES = 25 * 1024 * 1024; // 25 MB — same cap as the comment-attachment uploader.
+const MAX_BYTES = 25 * 1024 * 1024; // 25 MB, same cap as the comment-attachment uploader.
 
 export async function POST(
   req: Request,
@@ -32,14 +32,12 @@ export async function POST(
 ) {
   const { token, postId } = await ctx.params;
 
-  const supabase = await createServerSupabaseClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  if (!(await isAdmin(user.id))) {
-    return NextResponse.json({ error: 'admin only' }, { status: 403 });
-  }
+  // PRD 06 §"Server enforcement": any agency admin bound to this share
+  // link can replace content. The legacy isAdmin() check rejected admins
+  // from sibling agencies; the gate scopes admin-ness to *this* link.
+  const gate = await requireAdminOnShare(token);
+  if (!gate.ok) return gate.response;
+  const { context, identity } = gate;
 
   const admin = createAdminClient();
   const { data: link } = await admin
@@ -55,7 +53,7 @@ export async function POST(
     return NextResponse.json({ error: 'post is not part of this share link' }, { status: 400 });
   }
 
-  // Validate request body — multipart with a single image file.
+  // Validate request body, multipart with a single image file.
   const form = await req.formData().catch(() => null);
   const file = form?.get('file');
   if (!(file instanceof File)) {
@@ -70,7 +68,7 @@ export async function POST(
   }
 
   // Locate the drop_video + asset the share viewer is showing for this post.
-  // Single-image posts only — bail early on carousels so we don't silently
+  // Single-image posts only, bail early on carousels so we don't silently
   // overwrite the wrong frame. The viewer's UI hides Replace for carousels,
   // so this is just a defensive guard.
   const { data: video } = await admin
@@ -95,7 +93,7 @@ export async function POST(
   }
   if (assetRows.length > 1) {
     return NextResponse.json(
-      { error: 'carousel replace is not supported yet — replace individual frames in the editor' },
+      { error: 'carousel replace is not supported yet, replace individual frames in the editor' },
       { status: 400 },
     );
   }
@@ -167,6 +165,16 @@ export async function POST(
       })
       .in('id', mediaIds);
   }
+
+  await logShareAdminAction({
+    shareLinkId: context.linkId,
+    shareLinkKind: 'calendar',
+    actorUserId: identity.userId,
+    action: 'content.replace',
+    targetKind: 'post',
+    targetId: postId,
+    payload: { new_url: newUrl, mime_type: mime, asset_id: target.id },
+  });
 
   return NextResponse.json({ url: newUrl, mime_type: mime });
 }

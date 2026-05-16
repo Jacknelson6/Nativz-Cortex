@@ -15,14 +15,23 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
   const clientId = url.searchParams.get('clientId');
-  if (!clientId) return NextResponse.json({ drops: [] });
+  const handoff = url.searchParams.get('handoff');
+  if (!clientId && !handoff) return NextResponse.json({ drops: [] });
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('content_drops')
-    .select('*')
-    .eq('client_id', clientId)
+    .select('*, clients(name)')
     .order('created_at', { ascending: false });
+  if (clientId) query = query.eq('client_id', clientId);
+  if (handoff && handoff !== 'all') {
+    const VALID = ['editing', 'smm_review', 'smm_approved', 'smm_rejected', 'client_sent'];
+    if (!VALID.includes(handoff)) {
+      return NextResponse.json({ error: 'invalid handoff filter' }, { status: 400 });
+    }
+    query = query.eq('handoff_state', handoff);
+  }
 
+  const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ drops: data ?? [] });
 }

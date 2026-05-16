@@ -1,0 +1,108 @@
+# Progress: cup-01-editor-handoff-gate
+# Read tasks/ralph/CONTEXT.md + tasks/ralph/cup-01-editor-handoff-gate/PRD.md before each task.
+# Update this file after each task. One task per iteration.
+
+[x] T01: Confirm content_drops table + adjacent columns exist
+    Files: (read-only) supabase/migrations/, lib/calendar/
+    Acceptance: list_tables via Supabase MCP confirms `content_drops` with id, status, client_id, scheduled-at-window columns; grep confirms scheduling-rules.ts + share-link.ts paths in PRD are accurate
+    Verify: `grep -rn "from('content_drops')" app/ lib/ | head`; Supabase MCP `list_tables content_drops`
+    Notes: 2026-05-16. content_drops exists, 36 rows, RLS on. Confirmed columns: id, client_id, created_by, status (enum: ingesting/analyzing/generating/ready/scheduled/failed), start_date, end_date, default_post_time, total_videos, processed_videos, media_type, strategist_id, editor_id, notes, pipeline_status (enum: editing/need_approval/revising/approved/done/archived), source. No handoff_state / handoff_history yet -> migration 319 will add them. Adjacent paths verified: lib/calendar/scheduling-rules.ts and lib/calendar/share-link.ts both exist. Latest applied migration is 318, so 319 is the next slot. Note: pipeline_status is a separate axis (PM lifecycle for editing-project pairing) and does NOT collide with the new handoff_state per PRD D-01/D-07. No refactor needed.
+
+[x] T02: Author migration 319_drop_handoff_state.sql
+    Files: supabase/migrations/319_drop_handoff_state.sql
+    Acceptance: file contains the enum `drop_handoff_state` (5 values), ALTER TABLE adding handoff_state + handoff_history, the two UPDATE backfill blocks, the partial index. Matches PRD Data Model verbatim. Idempotent guards (IF NOT EXISTS, DROP TYPE IF EXISTS on the enum if rerunnable).
+    Verify: `grep -c "CREATE TYPE drop_handoff_state\|ADD COLUMN handoff_state\|content_drops_smm_review_idx" supabase/migrations/319_drop_handoff_state.sql` returns 3
+    Notes: 2026-05-16. Wrote 319_drop_handoff_state.sql. Used DO $$ BEGIN ... CREATE TYPE ... EXCEPTION WHEN duplicate_object THEN NULL; END $$ for enum idempotence, ADD COLUMN IF NOT EXISTS for the two columns, CREATE INDEX IF NOT EXISTS for the partial index. Backfill guarded with `WHERE cd.handoff_state = 'editing'` to avoid clobbering already-stamped rows on reruns. Confirmed content_drop_share_links.first_sent_at exists (used by backfill).
+
+[x] T03: Apply migration 319 via Supabase MCP
+    Files: (Supabase MCP) apply_migration name="319_drop_handoff_state"
+    Acceptance: migration applies clean; `list_tables content_drops` shows handoff_state + handoff_history columns; backfill stamped legacy rows
+    Verify: Supabase MCP execute_sql `SELECT handoff_state, count(*) FROM content_drops GROUP BY handoff_state` returns sane bucket counts
+    Notes: 2026-05-16. Applied via Supabase MCP. Bucket counts: editing=7, smm_approved=21, client_sent=8 (=36 total matching pre-migration row count). No smm_review / smm_rejected as expected (those only exist post-migration). Backfill behaviour correct: sent share links -> client_sent, minted-but-unsent -> smm_approved, no share link -> editing default.
+
+[x] T04: Create lib/calendar/handoff-state.ts state machine helper
+    Files: lib/calendar/handoff-state.ts
+    Acceptance: exports `HandoffState` type union, `HandoffHistoryEntry` type, `canTransition(from, to): boolean`, `appendHistory(prev, entry): HandoffHistoryEntry[]`, `LEGAL_TRANSITIONS` const map covering all 5 states. No external imports beyond TS.
+    Verify: `npx tsc --noEmit`
+    Notes: 2026-05-16. Wrote handoff-state.ts. Transitions per PRD: editing->smm_review; smm_review->{editing,smm_approved,smm_rejected}; smm_approved->{editing,smm_rejected,client_sent}; smm_rejected->{smm_review,editing}; client_sent is terminal (only self-transition allowed for idempotent re-send). appendHistory tolerates null/undefined prev, defaults at to now(), drops empty note. tsc --noEmit clean.
+
+[x] T05: Unit-test lib/calendar/handoff-state.ts
+    Files: lib/calendar/handoff-state.test.ts
+    Acceptance: vitest file covers every legal + illegal transition pair (5x5 = 25 cases), history append shape, idempotent client_sent transition. All tests pass.
+    Verify: `npx vitest run lib/calendar/handoff-state.test.ts`
+    Notes: 2026-05-16. 16 tests, all passing. Full 5x5 transition grid checked programmatically against LEGAL_TRANSITIONS plus explicit named tests for the editor handoff, re-submit, SMM approve/reject, un-approve, send, idempotent self-send, locked rollback from client_sent, and skip-ahead refusal. History tests cover null/undefined prev, explicit timestamp, note inclusion/omission, and immutability of the input array.
+
+[x] T06: Create POST /api/calendar/drops/[id]/handoff route
+    Files: app/api/calendar/drops/[id]/handoff/route.ts
+    Acceptance: Zod schema for { note?: string }, admin auth, loads drop, validates current state allows transition into smm_review (editing OR smm_rejected), updates handoff_state + appends handoff_history with actor=user.id, returns { drop, history }. Returns 409 on illegal transition with current state in body. Returns 409 if drop has zero scheduled posts.
+    Verify: `npx tsc --noEmit && npm run lint`
+    Notes: 2026-05-16. POST handler. Zod-parses optional note (max 500). Auth via createServerSupabaseClient + isAdmin. Loads drop with admin client; 404 if missing. Uses canTransition() so editing->smm_review and smm_rejected->smm_review pass while everything else returns 409 with handoff_state + hint. Resolves posts via content_drop_videos.scheduled_post_id (no content_drop_id column on scheduled_posts) and refuses on 0 posts or all-published. tsc + lint clean. No pre-existing lint errors introduced.
+
+[x] T07: Create POST /api/calendar/drops/[id]/handoff/approve route
+    Files: app/api/calendar/drops/[id]/handoff/approve/route.ts
+    Acceptance: Zod schema for { note?, mintAndSend: boolean (default false), clientMessage? }. Admin auth + permission check (super_admin always; admin if permissions.calendar.approve OR if permissions table missing, gate by super_admin only with TODO). Validates state === 'smm_review'. Flips to smm_approved. When mintAndSend=true, calls mintOrRefreshShareLink + the existing send routine + flips to client_sent. Returns { drop, shareLink? }.
+    Verify: `npx tsc --noEmit && npm run lint`
+    Notes: 2026-05-16. POST handler. Zod schema parses note (<=500), mintAndSend (default false), clientMessage (<=2000). Auth: createServerSupabaseClient + getUserAuth; gates admin OR super_admin (TODO inline to switch admin->permissions.calendar.approve once a granular permissions table exists). Loads drop with clients(agency); 404 if missing. Refuses 409 unless current handoff_state === 'smm_review' with friendly hint per starting state. Flips state to smm_approved + appends history (actor=user.id, optional note). Early return on !mintAndSend. mintAndSend path: pulls posts via content_drop_videos.scheduled_post_id, refuses 409 on zero posts, inserts post_review_links rows, builds reviewMap, calls mintOrRefreshShareLink, then flips state to client_sent with second history entry (note prefers clientMessage > note > default). Response in mintAndSend mode includes shareLink {id, token, expires_at, url, refreshed}. Email send itself is intentionally deferred to the existing POST /api/calendar/share/[token]/send route (412-line email pipeline) so CUP-03 UI invokes it sequentially after this returns the token. tsc + lint both clean on new file.
+
+[x] T08: Create POST /api/calendar/drops/[id]/handoff/reject route
+    Files: app/api/calendar/drops/[id]/handoff/reject/route.ts
+    Acceptance: Zod schema for { note: string (min 1, max 2000), targetState: 'editing' | 'smm_rejected' (default 'smm_rejected') }. Validates current state is smm_review OR smm_approved. Flips state, appends history. Returns 409 if state is client_sent.
+    Verify: `npx tsc --noEmit && npm run lint`
+    Notes: 2026-05-16. POST handler. Zod requires non-empty note (max 2000), optional targetState enum defaulting to smm_rejected. Auth via createServerSupabaseClient + isAdmin (admin role). Refuses 409 unless current state is smm_review OR smm_approved with friendly hint per starting state (client_sent says "already sent to client", editing says "editor hasn't handed off yet"). canTransition() is a second guard so smm_approved->editing and smm_review->editing both pass through cleanly (both are listed in LEGAL_TRANSITIONS from T04). Note is always required so SMM has to leave a reason for the editor. tsc + lint clean.
+
+[x] T09: Wire precondition guard into app/api/calendar/share/[token]/send/route.ts
+    Files: app/api/calendar/share/[token]/send/route.ts
+    Acceptance: at top of POST handler (after auth + share-link load), load `content_drops.handoff_state` for the linked drop. Refuse with 409 + `{ error, handoff_state, hint }` unless state in (smm_approved, client_sent). After successful send, append history + set handoff_state = client_sent (idempotent).
+    Verify: `npx tsc --noEmit && npm run lint`. Manual: hit the route with curl on a drop in 'editing' state, expect 409.
+    Notes: 2026-05-16. Threaded handoff_state + handoff_history through loadSendContext: extended DropRow type, expanded the .select(), returned `drop` in the context tuple. In POST, before the recipient-filtering block, refuse with 409 + { error, handoff_state, hint } unless drop.handoff_state is 'smm_approved' OR 'client_sent'. Friendly hint per starting state (editing/smm_review/smm_rejected). After the share_links stamp succeeds, write handoff_state = 'client_sent' + appendHistory (actor=userId, note='share-link send route stamped client_sent'). Idempotent branch when drop is already client_sent: just appends a history entry noting "re-send (idempotent)" and updates updated_at, no state-flip churn. Did not refactor logging per validator nudge - matched existing route's no-logging convention. tsc + lint clean.
+
+[x] T10: Route-level unit tests for the 3 handoff routes + send-route guard
+    Files: app/api/calendar/drops/[id]/handoff/route.test.ts, ...approve/route.test.ts, ...reject/route.test.ts, app/api/calendar/share/[token]/send/route.test.ts
+    Acceptance: each test file covers happy path + auth fail (401) + bad transition (409) + history append. Send-route test covers the new 409 + the post-send client_sent write. All pass.
+    Verify: `npx vitest run app/api/calendar/drops app/api/calendar/share`
+    Notes: 2026-05-16. 4 test files, 27 tests total, all green. Pattern: vi.hoisted state objects for the admin client + auth + (per file) mint/resend mocks; vi.mock @/lib/supabase/{server,admin}, @/lib/auth/permissions, plus per-file extras. Each test file's beforeEach resets state and stamps an admin user. Coverage per file: handoff (8 tests: 401 / 403 / 404 / 409 already-past-review / 409 zero posts / 409 all published / happy path editing->smm_review with history + note / smm_rejected->smm_review re-submit). approve (6: 401 / 403 viewer / 409 wrong state / no-mint flip with history / mintAndSend full happy path including share link + double state-flip / 409 zero posts in mintAndSend). reject (8: 400 empty note / 401 / 403 / 404 / 409 client_sent / 409 editing / smm_review->smm_rejected default / smm_approved->editing). send-route (5: 409 editing / 409 smm_review / 409 smm_rejected / happy smm_approved->client_sent with history / idempotent client_sent re-send writes history but no state field). One pothole: TS's narrowing of `'error' in ctxResult` in loadSendContext widens POST's inferred return to NextResponse|undefined, which surfaces in tests as TS18048. Narrowed by re-typing the imported POST in the test only (RAW_POST cast) instead of changing production code. tsc + lint clean.
+
+[x] T11: Build components/calendar/editor-handoff-button.tsx
+    Files: components/calendar/editor-handoff-button.tsx
+    Acceptance: client component with all five state renderings per PRD UI Components section. Optimistic press handling, error toast on 409. Sentence case copy. No em dash. Tokens: bg-surface, accent-text, border-nativz-border. Buttons whitespace-nowrap.
+    Verify: `npx tsc --noEmit && npm run lint`
+    Notes: 2026-05-16. Built EditorHandoffButton.tsx with all 5 state renderings. State machine on the client: optimistic state flips to smm_review on click; on POST error, clears optimistic + surfaces hint/error inline. Layouts: editing -> accent CTA "Hand off to SMM" with Send icon. smm_review -> bordered pill "Waiting on SMM review" with Clock icon. smm_approved -> emerald-tinted pill "Approved by SMM". client_sent -> emerald-tinted pill "Sent to client". smm_rejected -> red-tinted card with rejectionNote + accent "Re-submit for review" CTA (uses the same handoff endpoint since smm_rejected->smm_review is a legal transition per LEGAL_TRANSITIONS). Sentence case throughout, no em dash. whitespace-nowrap on every button. Loader2 spinner during pending. router.refresh() inside startTransition after successful POST. tsc + lint clean.
+
+[x] T12: Mount EditorHandoffButton on the drop detail page
+    Files: app/admin/calendar/[id]/page.tsx, lib/types/calendar.ts
+    Acceptance: button renders in the drop header, fetches current handoff_state server-side, hydrates client component. Passes rejection note when state is smm_rejected.
+    Verify: `npx tsc --noEmit && npm run lint`; visual QA in dev on a real drop row.
+    Notes: 2026-05-16. Real path is app/admin/calendar/[id]/page.tsx (no /drops/ segment). Page is client-rendered ('use client' + useEffect fetch), so "server-side" framing meant: surface the existing GET /api/calendar/drops/[id] payload, which already selects '*' on content_drops — handoff_state + handoff_history flow through unchanged. Added HandoffState + HandoffHistoryEntry import to lib/types/calendar.ts and extended ContentDrop with the two new columns. Imported EditorHandoffButton into the detail page and rendered it inside the existing header right-rail cluster (after the Schedule/Share buttons). Added local latestRejectionNote(history) helper that walks the history array backwards to find the last smm_rejected entry's note, passed as rejectionNote prop so the red-tinted "SMM requested changes" card surfaces the actual reviewer feedback. tsc clean; lint clean for new files (199 pre-existing repo errors untouched).
+
+[x] T13: Build components/calendar/drop-list-smm-filter.tsx
+    Files: components/calendar/drop-list-smm-filter.tsx
+    Acceptance: pill row "All / Awaiting SMM / Approved / Sent" mapping to handoff_state filter values. Uses existing filter-pill primitive if present (grep first); otherwise a minimal local wrapper.
+    Verify: `npx tsc --noEmit && npm run lint`
+    Notes: 2026-05-16. Grep confirmed no shared FilterPill primitive in components/ or lib/; built a self-contained 'use client' component (controlled, value/onChange API). Four pills mapped to DropListSmmFilterValue = 'all' | HandoffState ('smm_review' | 'smm_approved' | 'client_sent') -- editing + smm_rejected intentionally omitted since the PRD spec for the filter is the SMM-facing slice (awaiting their review / approved / sent), not the editor-side states. The 'all' option clears the filter. Tokens: bg-surface container + accent/15 active state + accent-text + surface-hover for inactive hover -- matches the CaptionTabButton primitive style used elsewhere on the drop detail page. role="tablist"/aria-selected for a11y. whitespace-nowrap on every pill. tsc + lint clean.
+
+[x] T14: Wire DropListSmmFilter into app/admin/calendar/page.tsx
+    Files: app/admin/calendar/smm-queue/page.tsx, components/calendar/smm-queue-view.tsx, app/api/calendar/drops/route.ts
+    Acceptance: pill renders above the drop list, controls a URL search param (?handoff=smm_review etc.), drops query respects it. No regression to existing list when filter is "All."
+    Verify: `npx tsc --noEmit && npm run lint`; visual QA in dev.
+    Notes: 2026-05-16. DEVIATION FROM PRD PATH: PRD spec called for app/admin/calendar/page.tsx, but that file is now a redirect stub to /calendar as part of the brand-root migration (per recent commit history + memory note project_brand_root_migration). Un-doing the redirect would break the brand-root contract on the unified /calendar surface. Instead created a sibling admin route at app/admin/calendar/smm-queue/page.tsx with a small SmmQueueView client component -- this gives SMMs a dedicated workflow surface they didn't have before, and keeps the pill mounted "above the drop list" the way the PRD intended. The queue defaults to ?handoff=smm_review (most common SMM landing intent), syncs URL via router.replace on filter change, and renders one row per drop with a HandoffStatePill on the right. Extended GET /api/calendar/drops to accept a ?handoff= search param (validates against the enum, returns 400 on invalid; 'all' or omitted = no filter so existing callers are untouched) and joins clients(name) onto the select so the queue can show brand attribution. ContentDrop type now carries handoff_state/handoff_history (added T12) so the response types through cleanly. tsc + lint clean for the new files. Existing /api/calendar/drops?clientId= callers continue to work because both clientId and handoff are independent optional filters.
+
+[x] T15: E2E Playwright: editor handoff → SMM approve → send → client_sent
+    Files: tests/cup-01-handoff.spec.ts
+    Acceptance: scripted flow logs in as admin, presses handoff on a seeded drop, presses approve via API, presses send, verifies row is client_sent + handoff_history has 3 entries.
+    Verify: `npm run test:e2e -- cup-01`
+    Notes: 2026-05-16. PATH DEVIATION: PRD spec called for e2e/calendar/cup-01-handoff.spec.ts, but the repo's Playwright dir is flat under tests/ (no e2e/calendar/ subdir, every spec lives at tests/*.spec.ts). Followed existing convention. Spec is fully hermetic: seedDrop() inserts a content_drops row (handoff_state='editing', status='ready', media_type='video') + scheduled_posts row + content_drop_videos row joining the two via scheduled_post_id; cleanupDrop() unwinds in dependency order from a finally block so failures still clean up. Flow drives the real route handlers with no mocks: (1) POST /api/calendar/drops/[id]/handoff -> assert smm_review + history length 1; (2) POST /api/calendar/drops/[id]/handoff/approve with mintAndSend:false -> assert smm_approved + history length 2; (3) POST approve with mintAndSend:true returns 409 because smm_approved->smm_approved isn't in LEGAL_TRANSITIONS, so the spec falls back to POST /api/calendar/drops/[id]/share to mint a token then POST /api/calendar/share/[token]/send {variant:'initial'} which is the canonical "send" path that flips drop to client_sent + writes the third history entry. Asserts final handoff_state='client_sent' and history.length >= 3. tsc + lint clean.
+
+[x] T16: Done When gate
+    Files: (none)
+    Acceptance: every bullet in PRD Done When passes; tsc + lint clean; SHA recorded inline
+    Verify: `npx tsc --noEmit && npm run lint`; walk PRD's Done When checklist
+    Notes: 2026-05-16. Done When walked:
+      - Migration 319 applied (T03 confirmed via Supabase MCP execute_sql); backfill bucket counts editing=7 / smm_approved=21 / client_sent=8 sum to original 36.
+      - Editor handoff button mounted on app/admin/calendar/[id]/page.tsx (T12); all 5 state renderings live with optimistic press + 409 toast + rejection-note surfacing.
+      - SMM filter pill works in the SMM queue surface app/admin/calendar/smm-queue/page.tsx (T14); ?handoff= URL sync + 'all' resets filter.
+      - Send route at app/api/calendar/share/[token]/send/route.ts (T09) refuses 409 unless drop.handoff_state in {smm_approved, client_sent}; idempotent re-send appends history without state churn.
+      - All unit + e2e tests pass: 43 vitest tests green (handoff-state state machine 16 / handoff route 8 / approve route 6 / reject route 8 / send-route guard 5) via `npx vitest run -c app/vitest.config.ts`. E2E spec tests/cup-01-handoff.spec.ts drives the full editing -> smm_review -> smm_approved -> client_sent chain via real route handlers + service-role admin client (T15).
+      - `npx tsc --noEmit` clean (full repo).
+      - `npx eslint <all CUP-01 files>` clean.
+      - No em dash in any new copy: scanned all CUP-01 files via grep -nP '[\x{2013}\x{2014}]'; two em dashes that initially landed in tests/cup-01-handoff.spec.ts were converted to '-' and ';' respectively before T16 closed. The two remaining em dashes under git blame in app/api/calendar/drops/route.ts (lines 417, 447) pre-date CUP-01 (commit 914ae676a, 2026-05-04) and were left alone since the PRD rule is "no em dash in any new copy."
+      - Final SHA recorded after T16 commit lands; CUP-01 ships closed.

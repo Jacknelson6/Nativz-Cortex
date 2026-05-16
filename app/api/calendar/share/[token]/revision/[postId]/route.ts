@@ -105,14 +105,24 @@ export async function POST(
 /**
  * DELETE /api/calendar/share/[token]/revision/[postId]
  *
- * Admin-only "remove from calendar" — drops the post from this share
- * link's `included_post_ids` and `post_review_link_map`. Intentionally
- * non-destructive: the underlying `scheduled_posts` row and
- * `content_drop_videos` row stay intact, so an editor who hits this by
- * mistake can re-include the post from admin UI without losing the
- * caption / media / comments. Use this when a client says "actually,
- * pull that one" or when the editor decides a post shouldn't be in the
- * calendar going to the brand.
+ * Admin-only "remove from calendar". The share link is the source of
+ * truth for what's actually on the calendar, so removing a post here
+ * also deletes the underlying `scheduled_posts` row to keep the two in
+ * sync. Without this, the removed post stayed in `scheduled_posts` as
+ * a `draft` and blocked future scheduling on the same Central day
+ * (one-post-per-platform-per-day rule in lib/calendar/scheduling-rules).
+ *
+ * Cascades handle the cleanup: `scheduled_post_platforms`,
+ * `scheduled_post_media`, `post_review_links` (and its comments), and
+ * `scheduled_post_late_ids` all delete on FK cascade. The
+ * `content_drop_videos.scheduled_post_id` FK is SET NULL, so the video
+ * row itself stays in the drop and can be re-scheduled later.
+ *
+ * The previous behaviour (leave scheduled_post intact for re-inclusion)
+ * was the "safer" choice on paper but turned out to leak orphans into
+ * the scheduling collision check. If a re-include flow is needed
+ * later, build it explicitly from the drop video instead of relying on
+ * the orphan row.
  */
 export async function DELETE(
   _req: Request,
@@ -161,6 +171,24 @@ export async function DELETE(
     .eq('id', link.id);
   if (updateErr) {
     return NextResponse.json({ error: updateErr.message }, { status: 500 });
+  }
+
+  // Hard-delete the underlying scheduled_post. Refuse to drop a post
+  // that has already published — those are historical and must stay
+  // for the audit trail / metrics.
+  const { data: postRow } = await admin
+    .from('scheduled_posts')
+    .select('id, status')
+    .eq('id', postId)
+    .single<{ id: string; status: string }>();
+  if (postRow && postRow.status !== 'published') {
+    const { error: delErr } = await admin
+      .from('scheduled_posts')
+      .delete()
+      .eq('id', postId);
+    if (delErr) {
+      return NextResponse.json({ error: delErr.message }, { status: 500 });
+    }
   }
 
   return NextResponse.json({ ok: true });

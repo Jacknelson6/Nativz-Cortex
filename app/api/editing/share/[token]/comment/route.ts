@@ -1,7 +1,9 @@
 import { NextResponse, after } from 'next/server';
 import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getShareContextOrNull, resolveBoundIdentity } from '@/lib/share/identity';
 import { createNotification } from '@/lib/notifications/create';
+import { notifyViewersOfShareEvent } from '@/lib/share/notify-viewers';
 import {
   buildChatCard,
   postToGoogleChatSafe,
@@ -172,7 +174,7 @@ async function loadProjectChatContext(
       ? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001'
       : getCortexAppUrl(brand);
   // Per-client webhook first, agency misc-catchall second. Client-comment
-  // notifications never fall back to OPS — that space is reserved for
+  // notifications never fall back to OPS, that space is reserved for
   // system-level alerts. Brands without their own webhook AND no agency
   // catchall silently no-op.
   const webhookUrl = await resolveTeamChatWebhook(admin, {
@@ -240,7 +242,7 @@ export async function POST(
   const link = linkResult.link;
 
   // If a video id is supplied, make sure it actually belongs to this
-  // project — otherwise a malicious client could pin comments onto
+  // project, otherwise a malicious client could pin comments onto
   // someone else's videos by guessing UUIDs.
   if (parsed.data.videoId) {
     const { data: video } = await admin
@@ -275,6 +277,53 @@ export async function POST(
       ? parsed.data.timestampSeconds ?? null
       : null;
 
+  // PRD 05: derive `author_role` + `author_user_id` from the bound session
+  // (not the client). admins / super_admins → 'admin'; matching viewers →
+  // 'viewer'; everything else (no session, wrong agency, anonymous) →
+  // 'guest'. video_revised events stay admin-authored by construction.
+  const shareContext = await getShareContextOrNull(token);
+  let authorRole: 'admin' | 'viewer' | 'guest' = 'guest';
+  let authorUserId: string | null = null;
+  if (shareContext) {
+    const { identity } = await resolveBoundIdentity(shareContext);
+    if (identity) {
+      authorUserId = identity.userId;
+      authorRole =
+        identity.role === 'admin' || identity.role === 'super_admin'
+          ? 'admin'
+          : identity.role === 'viewer'
+            ? 'viewer'
+            : 'guest';
+    }
+  }
+
+  // PRD 01 + 05: kind separates author intent from lifecycle. status stays
+  // for v1 read paths until PRD 09 cutover; kind is the new source of truth.
+  // Admin-authored plain comments flip to `admin_response` so the thread
+  // renders them as team replies and downstream consumers can split admin
+  // vs client traffic cheaply. Approvals / revisions / video_revised keep
+  // their status-derived kind regardless of author, those are state
+  // transitions, not free-form messages.
+  const baseKind:
+    | 'revision'
+    | 'feedback'
+    | 'approval'
+    | 'video_revised' =
+    finalStatus === 'changes_requested'
+      ? 'revision'
+      : finalStatus === 'approved'
+        ? 'approval'
+        : finalStatus === 'video_revised'
+          ? 'video_revised'
+          : 'feedback';
+  const insertKind:
+    | 'revision'
+    | 'feedback'
+    | 'approval'
+    | 'video_revised'
+    | 'admin_response' =
+    authorRole === 'admin' && baseKind === 'feedback' ? 'admin_response' : baseKind;
+
   const { data: inserted, error } = await admin
     .from('editing_project_review_comments')
     .insert({
@@ -282,14 +331,17 @@ export async function POST(
       video_id: parsed.data.videoId ?? null,
       share_link_id: link.id,
       author_name: parsed.data.authorName.trim(),
+      author_user_id: authorUserId,
+      author_role: authorRole,
       content: trimmedContent,
       status: finalStatus,
+      kind: insertKind,
       attachments: parsed.data.attachments ?? [],
       metadata: insertMetadata,
       timestamp_seconds: timestampSeconds,
     })
     .select(
-      'id, video_id, share_link_id, author_name, author_user_id, content, status, attachments, metadata, timestamp_seconds, created_at',
+      'id, video_id, share_link_id, author_name, author_user_id, author_role, content, status, kind, attachments, metadata, timestamp_seconds, created_at',
     )
     .single();
   if (error || !inserted) {
@@ -340,7 +392,7 @@ export async function POST(
   // Notify Jack (admin) so they can pull up the project. Mirrors the
   // calendar share notification pattern, minus the Monday + Zernio
   // legs that don't apply here. We skip notifications for the
-  // synthesised `video_revised` audit row — that event is always
+  // synthesised `video_revised` audit row, that event is always
   // authored by an admin who's already on the page.
   if (finalStatus !== 'video_revised') {
     after(async () => {
@@ -353,6 +405,46 @@ export async function POST(
         });
       } catch (err) {
         console.error('Editing comment notification failed:', err);
+      }
+
+      // PRD 08: admin-authored responses land in the viewer's portal bell.
+      // Viewer/guest-authored rows already get the admin fan-out above and
+      // never page their own brand peers.
+      if (authorRole === 'admin') {
+        try {
+          const { data: project } = await admin
+            .from('editing_projects')
+            .select('client_id, name, clients(name)')
+            .eq('id', link.project_id)
+            .maybeSingle<{
+              client_id: string | null;
+              name: string | null;
+              clients: { name: string | null } | null;
+            }>();
+          const brandLabel =
+            project?.clients?.name ?? project?.name ?? 'your project';
+          const titleByStatus: Record<
+            'approved' | 'changes_requested' | 'comment',
+            string
+          > = {
+            approved: `${parsed.data.authorName.trim()} approved a clip on ${brandLabel}`,
+            changes_requested: `${parsed.data.authorName.trim()} flagged a revision on ${brandLabel}`,
+            comment: `${parsed.data.authorName.trim()} replied on ${brandLabel}`,
+          };
+          const previewStatus = finalStatus;
+          const preview = trimmedContent
+            ? trimmedContent.slice(0, 140) + (trimmedContent.length > 140 ? '…' : '')
+            : '';
+          await notifyViewersOfShareEvent({
+            clientId: project?.client_id ?? null,
+            title: titleByStatus[previewStatus],
+            body: preview,
+            linkPath: `/s/${token}`,
+            type: 'feedback_received',
+          });
+        } catch (err) {
+          console.error('Viewer notification (editing) failed:', err);
+        }
       }
 
       try {
@@ -369,7 +461,7 @@ export async function POST(
       // NAT-66: paid-media ping fires INDEPENDENTLY of the strategy chat
       // path above. A brand can have a paid-media webhook set without
       // having a strategy webhook (or vice-versa), and the ads team alert
-      // must NOT be silenced when `editing_all_approved_chat` is off —
+      // must NOT be silenced when `editing_all_approved_chat` is off , 
       // that setting governs strategy-chat noise, not the ads handoff.
       // Gated solely by the all-approved claim winner so we don't double-
       // post on concurrent approvals.
@@ -455,7 +547,7 @@ async function postEditingChatForComment(args: {
           widgets: [
             {
               type: 'text',
-              text: `Client approved every ${noun.singular} in this project. It's marked done — no team action needed.`,
+              text: `Client approved every ${noun.singular} in this project. It's marked done, no team action needed.`,
             },
             {
               type: 'button',
@@ -466,7 +558,7 @@ async function postEditingChatForComment(args: {
           ],
         },
       ],
-      fallbackText: `🎉 ${clientName} · ${projectName} — client approved every ${noun.singular}. ${shareUrl}`,
+      fallbackText: `🎉 ${clientName} · ${projectName}, client approved every ${noun.singular}. ${shareUrl}`,
     }),
     `editing-all-approved ${args.link.id}`,
   );
@@ -475,7 +567,7 @@ async function postEditingChatForComment(args: {
 /**
  * NAT-66: paid-media (ads team) ping for the all-approved claim winner.
  *
- * Standalone from `postEditingChatForComment` on purpose — the strategy
+ * Standalone from `postEditingChatForComment` on purpose, the strategy
  * chat path can be silenced (no webhook, or `editing_all_approved_chat`
  * disabled) without killing the ads handoff. Brands can configure
  * paid-media + strategy chat independently.
@@ -513,7 +605,7 @@ async function pingPaidMediaForEditingApproval(args: {
     process.env.NODE_ENV !== 'production'
       ? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001'
       : getCortexAppUrl(brand);
-  // Paid-media team jumps straight into the dedicated download grid — they
+  // Paid-media team jumps straight into the dedicated download grid, they
   // only need the final cuts, not the comment thread or revision history.
   const downloadUrl = `${appUrl}/c/edit/${args.token}/download`;
 
@@ -602,7 +694,7 @@ export async function DELETE(
     // The project may have been rolled up to 'approved' when this
     // comment landed. Revert it back to 'need_approval' so the review
     // board pill stays accurate. Skip if the project was manually moved
-    // forward (revising/done/archived) — reverting those would unwind
+    // forward (revising/done/archived), reverting those would unwind
     // legitimate state.
     await admin
       .from('editing_projects')
@@ -840,16 +932,17 @@ async function notifyAdminsOfComment(
 
   const linkPath = `/admin/editing?project=${project.id}`;
 
-  // In-app: Jack only (matches calendar pattern). Future: route by
-  // project editor / strategist.
-  const { data: jack } = await admin
+  // PRD 08: fan out to every admin user (matches calendar parity). Was
+  // previously Jack-only, left other editors without an in-app ping
+  // unless they happened to be in the right Google Chat space.
+  const { data: adminUsers } = await admin
     .from('users')
     .select('id')
-    .eq('email', 'jack@nativz.io')
-    .maybeSingle<{ id: string }>();
-  if (jack?.id) {
+    .eq('role', 'admin')
+    .returns<Array<{ id: string }>>();
+  for (const adminUser of adminUsers ?? []) {
     createNotification({
-      recipientUserId: jack.id,
+      recipientUserId: adminUser.id,
       type: 'general',
       title,
       body: preview,
