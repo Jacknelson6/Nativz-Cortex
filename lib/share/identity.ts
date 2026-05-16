@@ -165,9 +165,14 @@ export async function resolveBoundIdentity(
   if (!user) return { identity: null, sessionPresent: false };
 
   const admin = createAdminClient();
+  // The `organizations` table doesn't carry an `agency` string column —
+  // agency orgs are rows where `type='agency'` and the `name` *is* the
+  // agency string (e.g. "Nativz"). Match admins by org name when their
+  // org is the agency. Viewer rows live in `type='client'` orgs and
+  // match by organization_id only, so type+name aren't needed there.
   const { data: userRow } = await admin
     .from('users')
-    .select('id, email, full_name, role, organization_id, organizations(agency)')
+    .select('id, email, full_name, role, organization_id, organizations(name, type)')
     .eq('id', user.id)
     .maybeSingle<{
       id: string;
@@ -175,7 +180,7 @@ export async function resolveBoundIdentity(
       full_name: string | null;
       role: 'admin' | 'super_admin' | 'viewer' | null;
       organization_id: string | null;
-      organizations: { agency: string | null } | null;
+      organizations: { name: string | null; type: string | null } | null;
     }>();
 
   if (!userRow || !userRow.role) {
@@ -183,7 +188,10 @@ export async function resolveBoundIdentity(
   }
 
   const role = userRow.role;
-  const userAgency = userRow.organizations?.agency ?? null;
+  const userAgency =
+    userRow.organizations?.type === 'agency'
+      ? userRow.organizations?.name ?? null
+      : null;
   const userOrgId = userRow.organization_id;
 
   let matches = false;
