@@ -26,11 +26,11 @@
     Verify: `npx tsc --noEmit`
     Notes: 2026-05-16. Wrote handoff-state.ts. Transitions per PRD: editing->smm_review; smm_review->{editing,smm_approved,smm_rejected}; smm_approved->{editing,smm_rejected,client_sent}; smm_rejected->{smm_review,editing}; client_sent is terminal (only self-transition allowed for idempotent re-send). appendHistory tolerates null/undefined prev, defaults at to now(), drops empty note. tsc --noEmit clean.
 
-[ ] T05: Unit-test lib/calendar/handoff-state.ts
+[x] T05: Unit-test lib/calendar/handoff-state.ts
     Files: lib/calendar/handoff-state.test.ts
     Acceptance: vitest file covers every legal + illegal transition pair (5x5 = 25 cases), history append shape, idempotent client_sent transition. All tests pass.
     Verify: `npx vitest run lib/calendar/handoff-state.test.ts`
-    Notes:
+    Notes: 2026-05-16. 16 tests, all passing. Full 5x5 transition grid checked programmatically against LEGAL_TRANSITIONS plus explicit named tests for the editor handoff, re-submit, SMM approve/reject, un-approve, send, idempotent self-send, locked rollback from client_sent, and skip-ahead refusal. History tests cover null/undefined prev, explicit timestamp, note inclusion/omission, and immutability of the input array.
 
 [ ] T06: Create POST /api/calendar/drops/[id]/handoff route
     Files: app/api/calendar/drops/[id]/handoff/route.ts
