@@ -5,7 +5,7 @@
 -- repeat fires inside a short window.
 --
 -- notifications.type is a free-text column (not enum-backed), so no ALTER
--- TYPE is needed for the new 'drop_smm_review_ready' type — the dispatcher
+-- TYPE is needed for the new 'drop_smm_review_ready' type; the dispatcher
 -- just writes that string directly.
 
 ALTER TABLE clients

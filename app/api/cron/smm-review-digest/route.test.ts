@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * CUP-02 T14 — unit test for the daily SMM review digest cron.
+ * CUP-02 T14 unit test for the daily SMM review digest cron.
  * Mocks the admin client + Slack helper so we exercise auth, off-mode
  * no-op, and on-mode grouping/posting/stamping branches.
  */
@@ -63,7 +63,9 @@ function buildAdminClient() {
   };
 }
 
-import { GET } from './route';
+import { GET as GETExported } from './route';
+
+const GET = GETExported as unknown as (req: Request) => Promise<Response>;
 
 function buildRequest(token: string | null = 'cron-secret-123'): Request {
   const headers: Record<string, string> = {};
