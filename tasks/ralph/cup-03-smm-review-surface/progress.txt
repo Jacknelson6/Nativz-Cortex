@@ -52,11 +52,11 @@
     Verify: `npx tsc --noEmit && npm run lint`; visual QA in dev on a real drop in smm_review
     Notes: 2026-05-16. Built server component + a thin client wrapper (ReviewActionsClient) that owns the action handlers + reject dialog. Server flow: createServerSupabaseClient -> getUser (redirect to /login if anon) -> isAdmin gate (403 page when false) -> load drop with clients(name) -> if state==='client_sent', look up latest non-revoked share link and redirect to /admin/calendar/review/<token>; otherwise load content_drop_videos in order, then scheduled_posts by id, then post_review_links + post_review_comments to build per-post comment counts. Builds ReviewPost[] preferring scheduled_posts data over draft fields, falls back to drive_file_name for title. History actors resolved via users.full_name/email (matches existing share-link emails route pattern). Layout: 2-column on lg+ (header + post list on left, ReviewActionsClient sticky on right); single column with mobile bottom-bar padding (pb-32) on smaller screens. ReviewActionsClient hits: POST /handoff/approve, POST /handoff/reject (via RejectDialog), POST /drops/[id]/share then /share/[token]/send for "Send to client", POST /share/[token]/send with variant=revised for resend. router.refresh() after each. tsc + lint clean, no em/en dashes.
 
-[ ] T09: Create app/admin/calendar/review/[token]/page.tsx
+[x] T09: Create app/admin/calendar/review/[token]/page.tsx
     Files: app/admin/calendar/review/[token]/page.tsx
     Acceptance: server component. Loads content_drop_share_links + linked drop + posts via included_post_ids. Renders the same shell as T08 but with state pinned to smm_approved or client_sent. ResendBar variant active when client_sent.
     Verify: `npx tsc --noEmit && npm run lint`
-    Notes:
+    Notes: 2026-05-16. Built. Same auth/layout chassis as T08 but keyed by share-link token instead of drop id. Flow: load content_drop_share_links by token -> drop via link.drop_id -> scheduled_posts.in('id', included_post_ids) -> content_drop_videos.in('scheduled_post_id', included_post_ids). Re-sorted reviewPosts by videos.order_index so the SMM sees the same ordering as the client. ReviewActionsClient receives shareToken so resend (variant=revised) is wired. State pinning is implicit: handoff_state reads from the drop row, and the only legal states at /[token] are smm_approved (CTAs are Send to client + Reject with note) and client_sent (CTA is Resend to client). tsc + lint clean, no em/en dashes.
 
 [ ] T10: Update cup-02 notification + Slack message to use correct review URL
     Files: lib/calendar/notify-smm-review.ts (depends on cup-02 T06)
