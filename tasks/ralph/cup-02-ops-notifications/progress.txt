@@ -37,11 +37,11 @@
     Verify: `npx tsc --noEmit && npm run lint`
     Notes: 2026-05-16. Wrote postOpsSlack({webhookUrl, text, blocks?}) -> Promise<{ok, error?}>. AbortController + 5s timeout, never throws (try/catch wraps fetch and clearTimeout in finally). Returns {ok:false, error:'missing webhook url'} when webhookUrl is empty. Returns {ok:false, error:'slack <status>: <body slice>'} on non-2xx (body trimmed to 200 chars to avoid runaway error messages). SlackBlock union covers section (mrkdwn or plain_text), divider, and actions->button (with optional url/value/style) — the three primitives the dispatcher needs. tsc + lint both clean.
 
-[ ] T05: Unit-test lib/social/slack-webhook.ts
+[x] T05: Unit-test lib/social/slack-webhook.ts
     Files: lib/social/slack-webhook.test.ts
     Acceptance: mocks fetch; covers 200 ok, 401 error, network throw → swallow, payload-shape assertion.
     Verify: `npx vitest run lib/social/slack-webhook.test.ts`
-    Notes:
+    Notes: 2026-05-16. 5 tests, all passing. Coverage: (1) 200 happy path asserts both the return value and the full payload shape (url, method, content-type header, JSON body with text + blocks); (2) blocks omitted from JSON when not passed (uses 'blocks' in body check); (3) 401 returns ok:false with error string containing both '401' and the response body slice; (4) network throw (fetch rejects with ECONNRESET) is swallowed -> ok:false + error from err.message; (5) empty webhookUrl returns ok:false without calling fetch. vi.stubGlobal('fetch', mock) + vi.restoreAllMocks in beforeEach. tsc + lint clean.
 
 [ ] T06: Build lib/calendar/notify-smm-review.ts dispatcher
     Files: lib/calendar/notify-smm-review.ts
