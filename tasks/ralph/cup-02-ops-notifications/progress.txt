@@ -3,11 +3,21 @@
 # Update this file after each task. One task per iteration.
 # Depends on cup-01 T06 (handoff route exists) for T08 wiring.
 
-[ ] T01: Confirm notifications table + lib/notifications.ts shape
+[x] T01: Confirm notifications table + lib/notifications.ts shape
     Files: (read-only) lib/notifications.ts, supabase/migrations/
     Acceptance: confirm `notifications` table has user_id, type (text), payload (jsonb), link, read_at; confirm createNotification signature; confirm whether type is enum-backed or free text. Note in progress whether migration 320 needs to extend an enum.
     Verify: Supabase MCP list_tables notifications; grep "createNotification" lib/notifications.ts
-    Notes:
+    Notes: 2026-05-16. PRD column-name assumptions are stale. Actual schema (via Supabase MCP information_schema query):
+      - id uuid PK
+      - recipient_user_id uuid (not "user_id")
+      - organization_id uuid
+      - type text NOT NULL (NOT enum-backed; existing types in prod: feedback_received, general, search_completed, topic_search_stuck) -> migration 320 will NOT need ALTER TYPE; just inserting type='drop_smm_review_ready' is enough
+      - title text NOT NULL (createNotification requires it)
+      - body text nullable (not "payload jsonb")
+      - link_path text nullable (not "link")
+      - is_read boolean (not "read_at" timestamp)
+      - email_sent boolean / email_sent_at timestamptz / created_at timestamptz
+      createNotification helper lives at lib/notifications/create.ts. Signature: createNotification({ recipientUserId, type, title, body?, linkPath? }). Never throws (try/catch + console.error). A notification registry exists at lib/notifications/registry.ts with channels + per-client toggle support; new dispatcher in T06 should also register 'drop_smm_review_ready' there for consistency with existing entries. All subsequent CUP-02 tasks must use the correct columns (recipient_user_id / title / body / link_path / is_read), NOT the PRD's user_id/payload/link/read_at framing.
 
 [ ] T02: Author migration 320_smm_review_routing.sql
     Files: supabase/migrations/320_smm_review_routing.sql
