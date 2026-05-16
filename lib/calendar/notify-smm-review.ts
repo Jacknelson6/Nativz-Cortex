@@ -14,6 +14,8 @@ import { type SupabaseClient } from '@supabase/supabase-js';
 import { createNotification } from '@/lib/notifications/create';
 import { postOpsSlack, type SlackBlock } from '@/lib/social/slack-webhook';
 import type { HandoffHistoryEntry } from '@/lib/calendar/handoff-state';
+import { getCortexAppUrl } from '@/lib/agency/cortex-url';
+import { getBrandFromAgency } from '@/lib/agency/detect';
 
 const DEDUP_WINDOW_MS = 60_000;
 
@@ -56,7 +58,7 @@ export async function notifySmmReviewReady(
     const { data: drop, error: dropErr } = await admin
       .from('content_drops')
       .select(
-        'id, client_id, start_date, end_date, handoff_history, last_smm_review_notified_at, clients(name, organization_id, smm_reviewer_user_id)',
+        'id, client_id, start_date, end_date, handoff_history, last_smm_review_notified_at, clients(name, organization_id, smm_reviewer_user_id, agency)',
       )
       .eq('id', args.dropId)
       .maybeSingle();
@@ -79,6 +81,7 @@ export async function notifySmmReviewReady(
       name?: string;
       organization_id?: string;
       smm_reviewer_user_id?: string | null;
+      agency?: string | null;
     };
     const clientName = client.name ?? 'Unknown brand';
 
@@ -101,7 +104,9 @@ export async function notifySmmReviewReady(
       return { inAppNotified: 0, slackPosted: false, skipped: 'no_recipients' };
     }
 
-    const reviewUrl = `/admin/calendar/review/drop/${args.dropId}`;
+    const reviewPath = `/admin/calendar/review/drop/${args.dropId}`;
+    const brand = getBrandFromAgency(client.agency ?? null);
+    const reviewUrlAbsolute = `${getCortexAppUrl(brand)}${reviewPath}`;
     const dateRange = fmtRange(drop.start_date as string | null, drop.end_date as string | null);
     const title = `${clientName}: calendar ready for review`;
     const body = `${postCount ?? 0} posts, ${dateRange}${args.note ? `. editor note: ${args.note}` : ''}`;
@@ -113,7 +118,7 @@ export async function notifySmmReviewReady(
           type: 'drop_smm_review_ready',
           title,
           body,
-          linkPath: reviewUrl,
+          linkPath: reviewPath,
         }),
       ),
     );
@@ -147,7 +152,7 @@ export async function notifySmmReviewReady(
             {
               type: 'button',
               text: { type: 'plain_text', text: 'Review on Cortex' },
-              url: reviewUrl,
+              url: reviewUrlAbsolute,
               style: 'primary',
             },
           ],

@@ -58,11 +58,11 @@
     Verify: `npx tsc --noEmit && npm run lint`
     Notes: 2026-05-16. Built. Same auth/layout chassis as T08 but keyed by share-link token instead of drop id. Flow: load content_drop_share_links by token -> drop via link.drop_id -> scheduled_posts.in('id', included_post_ids) -> content_drop_videos.in('scheduled_post_id', included_post_ids). Re-sorted reviewPosts by videos.order_index so the SMM sees the same ordering as the client. ReviewActionsClient receives shareToken so resend (variant=revised) is wired. State pinning is implicit: handoff_state reads from the drop row, and the only legal states at /[token] are smm_approved (CTAs are Send to client + Reject with note) and client_sent (CTA is Resend to client). tsc + lint clean, no em/en dashes.
 
-[ ] T10: Update cup-02 notification + Slack message to use correct review URL
+[x] T10: Update cup-02 notification + Slack message to use correct review URL
     Files: lib/calendar/notify-smm-review.ts (depends on cup-02 T06)
     Acceptance: pre-approval notifications link to `/admin/calendar/review/drop/[id]`. Post-approval notifications (resend, etc.) link to `/admin/calendar/review/[token]`.
     Verify: `npx tsc --noEmit && npm run lint`
-    Notes:
+    Notes: 2026-05-16. Two changes. (1) In-app notification linkPath stays relative at `/admin/calendar/review/drop/<id>` (correct since notifySmmReviewReady only fires on the smm_review transition - pre-approval). (2) Slack button URL was a relative path before this commit, which Slack rejects - buttons MUST be absolute. Switched to `${getCortexAppUrl(brandFromClient.agency)}${reviewPath}` so the brand-correct host (cortex.nativz.io or cortex.andersoncollaborative.com or NEXT_PUBLIC_APP_URL in dev) prefixes the path. Added `agency` to the existing clients(...) select. The post-approval /[token] URL is NOT emitted by this dispatcher - that surface is reached via the share-link send routes which already build their own URLs in lib/email/resend.ts. 8 existing tests in lib/calendar/notify-smm-review.test.ts still pass (relative path in in-app linkPath matches the test assertions). tsc + lint clean, no em/en dashes.
 
 [ ] T11: Component unit tests
     Files: components/calendar/review/approve-and-send-bar.test.tsx, components/calendar/review/reject-dialog.test.tsx
