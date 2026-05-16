@@ -68,11 +68,11 @@
     Verify: `npx tsc --noEmit && npm run lint`
     Notes: 2026-05-16. Built EditorHandoffButton.tsx with all 5 state renderings. State machine on the client: optimistic state flips to smm_review on click; on POST error, clears optimistic + surfaces hint/error inline. Layouts: editing -> accent CTA "Hand off to SMM" with Send icon. smm_review -> bordered pill "Waiting on SMM review" with Clock icon. smm_approved -> emerald-tinted pill "Approved by SMM". client_sent -> emerald-tinted pill "Sent to client". smm_rejected -> red-tinted card with rejectionNote + accent "Re-submit for review" CTA (uses the same handoff endpoint since smm_rejected->smm_review is a legal transition per LEGAL_TRANSITIONS). Sentence case throughout, no em dash. whitespace-nowrap on every button. Loader2 spinner during pending. router.refresh() inside startTransition after successful POST. tsc + lint clean.
 
-[ ] T12: Mount EditorHandoffButton on the drop detail page
-    Files: app/admin/calendar/drops/[id]/page.tsx (or current equivalent; confirm via grep first)
+[x] T12: Mount EditorHandoffButton on the drop detail page
+    Files: app/admin/calendar/[id]/page.tsx, lib/types/calendar.ts
     Acceptance: button renders in the drop header, fetches current handoff_state server-side, hydrates client component. Passes rejection note when state is smm_rejected.
     Verify: `npx tsc --noEmit && npm run lint`; visual QA in dev on a real drop row.
-    Notes:
+    Notes: 2026-05-16. Real path is app/admin/calendar/[id]/page.tsx (no /drops/ segment). Page is client-rendered ('use client' + useEffect fetch), so "server-side" framing meant: surface the existing GET /api/calendar/drops/[id] payload, which already selects '*' on content_drops — handoff_state + handoff_history flow through unchanged. Added HandoffState + HandoffHistoryEntry import to lib/types/calendar.ts and extended ContentDrop with the two new columns. Imported EditorHandoffButton into the detail page and rendered it inside the existing header right-rail cluster (after the Schedule/Share buttons). Added local latestRejectionNote(history) helper that walks the history array backwards to find the last smm_rejected entry's note, passed as rejectionNote prop so the red-tinted "SMM requested changes" card surfaces the actual reviewer feedback. tsc clean; lint clean for new files (199 pre-existing repo errors untouched).
 
 [ ] T13: Build components/calendar/drop-list-smm-filter.tsx
     Files: components/calendar/drop-list-smm-filter.tsx

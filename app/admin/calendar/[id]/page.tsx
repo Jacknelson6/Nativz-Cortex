@@ -32,6 +32,8 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { useConfirm } from '@/components/ui/confirm-dialog';
+import { EditorHandoffButton } from '@/components/calendar/editor-handoff-button';
+import type { HandoffHistoryEntry } from '@/lib/calendar/handoff-state';
 import type {
   CaptionVariantPlatform,
   CaptionVariants,
@@ -128,6 +130,15 @@ function newestChangesRequestedAt(comments: DropComment[]): string | null {
     if (!newest || c.created_at > newest) newest = c.created_at;
   }
   return newest;
+}
+
+function latestRejectionNote(history: HandoffHistoryEntry[] | null | undefined): string | undefined {
+  if (!Array.isArray(history)) return undefined;
+  for (let i = history.length - 1; i >= 0; i--) {
+    const entry = history[i];
+    if (entry.state === 'smm_rejected' && entry.note) return entry.note;
+  }
+  return undefined;
 }
 
 function hasOutstandingRevision(
@@ -360,6 +371,11 @@ export default function DropDetailPage({ params }: { params: Promise<{ id: strin
               {generatingShare ? 'Generating…' : 'Share with client'}
             </Button>
           )}
+          <EditorHandoffButton
+            dropId={drop.id}
+            state={drop.handoff_state}
+            rejectionNote={latestRejectionNote(drop.handoff_history)}
+          />
         </div>
       </header>
 

@@ -1,3 +1,5 @@
+import type { HandoffHistoryEntry, HandoffState } from '@/lib/calendar/handoff-state';
+
 export type DropStatus =
   | 'ingesting'
   | 'analyzing'
@@ -30,6 +32,8 @@ export interface ContentDrop {
   created_at: string;
   updated_at: string;
   media_type: 'video' | 'image';
+  handoff_state: HandoffState;
+  handoff_history: HandoffHistoryEntry[] | null;
 }
 
 // Lightweight per-video context: transcript + thumbnail are enough for caption
