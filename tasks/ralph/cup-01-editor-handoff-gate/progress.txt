@@ -32,11 +32,11 @@
     Verify: `npx vitest run lib/calendar/handoff-state.test.ts`
     Notes: 2026-05-16. 16 tests, all passing. Full 5x5 transition grid checked programmatically against LEGAL_TRANSITIONS plus explicit named tests for the editor handoff, re-submit, SMM approve/reject, un-approve, send, idempotent self-send, locked rollback from client_sent, and skip-ahead refusal. History tests cover null/undefined prev, explicit timestamp, note inclusion/omission, and immutability of the input array.
 
-[ ] T06: Create POST /api/calendar/drops/[id]/handoff route
+[x] T06: Create POST /api/calendar/drops/[id]/handoff route
     Files: app/api/calendar/drops/[id]/handoff/route.ts
     Acceptance: Zod schema for { note?: string }, admin auth, loads drop, validates current state allows transition into smm_review (editing OR smm_rejected), updates handoff_state + appends handoff_history with actor=user.id, returns { drop, history }. Returns 409 on illegal transition with current state in body. Returns 409 if drop has zero scheduled posts.
     Verify: `npx tsc --noEmit && npm run lint`
-    Notes:
+    Notes: 2026-05-16. POST handler. Zod-parses optional note (max 500). Auth via createServerSupabaseClient + isAdmin. Loads drop with admin client; 404 if missing. Uses canTransition() so editing->smm_review and smm_rejected->smm_review pass while everything else returns 409 with handoff_state + hint. Resolves posts via content_drop_videos.scheduled_post_id (no content_drop_id column on scheduled_posts) and refuses on 0 posts or all-published. tsc + lint clean. No pre-existing lint errors introduced.
 
 [ ] T07: Create POST /api/calendar/drops/[id]/handoff/approve route
     Files: app/api/calendar/drops/[id]/handoff/approve/route.ts
