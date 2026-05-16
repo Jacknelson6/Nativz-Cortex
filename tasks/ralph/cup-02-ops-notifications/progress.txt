@@ -31,11 +31,11 @@
     Verify: Supabase MCP execute_sql `SELECT column_name FROM information_schema.columns WHERE table_name IN ('clients','content_drops') AND column_name IN ('smm_reviewer_user_id','last_smm_review_notified_at')` returns both
     Notes: 2026-05-16. Applied clean via Supabase MCP apply_migration name=320_smm_review_routing -> {"success":true}. Verification query returns both: clients.smm_reviewer_user_id + content_drops.last_smm_review_notified_at. Partial index also created. Migration ledger now shows 320 as the latest applied migration; next slot is 321.
 
-[ ] T04: Build lib/social/slack-webhook.ts generic helper
+[x] T04: Build lib/social/slack-webhook.ts generic helper
     Files: lib/social/slack-webhook.ts
     Acceptance: exports postOpsSlack({ webhookUrl, text, blocks }) -> { ok, error? }. Uses fetch with 5s timeout. Never throws. Returns { ok: false, error } on non-2xx or network error. Typed SlackBlock minimal subset (section, button, divider).
     Verify: `npx tsc --noEmit && npm run lint`
-    Notes:
+    Notes: 2026-05-16. Wrote postOpsSlack({webhookUrl, text, blocks?}) -> Promise<{ok, error?}>. AbortController + 5s timeout, never throws (try/catch wraps fetch and clearTimeout in finally). Returns {ok:false, error:'missing webhook url'} when webhookUrl is empty. Returns {ok:false, error:'slack <status>: <body slice>'} on non-2xx (body trimmed to 200 chars to avoid runaway error messages). SlackBlock union covers section (mrkdwn or plain_text), divider, and actions->button (with optional url/value/style) — the three primitives the dispatcher needs. tsc + lint both clean.
 
 [ ] T05: Unit-test lib/social/slack-webhook.ts
     Files: lib/social/slack-webhook.test.ts
