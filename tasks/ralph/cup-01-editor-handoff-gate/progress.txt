@@ -20,11 +20,11 @@
     Verify: Supabase MCP execute_sql `SELECT handoff_state, count(*) FROM content_drops GROUP BY handoff_state` returns sane bucket counts
     Notes: 2026-05-16. Applied via Supabase MCP. Bucket counts: editing=7, smm_approved=21, client_sent=8 (=36 total matching pre-migration row count). No smm_review / smm_rejected as expected (those only exist post-migration). Backfill behaviour correct: sent share links -> client_sent, minted-but-unsent -> smm_approved, no share link -> editing default.
 
-[ ] T04: Create lib/calendar/handoff-state.ts state machine helper
+[x] T04: Create lib/calendar/handoff-state.ts state machine helper
     Files: lib/calendar/handoff-state.ts
     Acceptance: exports `HandoffState` type union, `HandoffHistoryEntry` type, `canTransition(from, to): boolean`, `appendHistory(prev, entry): HandoffHistoryEntry[]`, `LEGAL_TRANSITIONS` const map covering all 5 states. No external imports beyond TS.
     Verify: `npx tsc --noEmit`
-    Notes:
+    Notes: 2026-05-16. Wrote handoff-state.ts. Transitions per PRD: editing->smm_review; smm_review->{editing,smm_approved,smm_rejected}; smm_approved->{editing,smm_rejected,client_sent}; smm_rejected->{smm_review,editing}; client_sent is terminal (only self-transition allowed for idempotent re-send). appendHistory tolerates null/undefined prev, defaults at to now(), drops empty note. tsc --noEmit clean.
 
 [ ] T05: Unit-test lib/calendar/handoff-state.ts
     Files: lib/calendar/handoff-state.test.ts
