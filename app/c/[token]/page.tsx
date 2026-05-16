@@ -3587,8 +3587,12 @@ function PostCard({
         {/* Cover photo: video posts only. Visible to both reviewers and
             editors (per Item 4 of the PRD, covers are a brand-side
             decision, not a strategist-only one). Image posts already use
-            their asset as the visible thumbnail, so no cover affordance. */}
-        {!isImagePost && (
+            their asset as the visible thumbnail, so no cover affordance.
+            Hidden from anonymous visitors so the affordance only appears
+            after the visitor has identified themselves through the
+            gateway, otherwise clicking would just bounce to the name
+            prompt and feels like a dead end. */}
+        {!isImagePost && (isEditor || authorName.trim() !== '') && (
           <button
             type="button"
             onClick={() => {
@@ -3615,8 +3619,9 @@ function PostCard({
         )}
         {/* Reset cover only when a custom cover has been set. Falls back
             to the auto-first-frame thumbnail Mux + the ingest pipeline
-            stamped at upload time. */}
-        {!isImagePost && post.cover_image_url && (
+            stamped at upload time. Same identity gate as the edit button
+            above. */}
+        {!isImagePost && post.cover_image_url && (isEditor || authorName.trim() !== '') && (
           <button
             type="button"
             onClick={() => void clearCover()}
