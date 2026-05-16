@@ -28,11 +28,11 @@
     Verify: `npx tsc --noEmit && npm run lint`
     Notes: 2026-05-16. Built. 'use client' component. State-driven button list: smm_review/smm_rejected -> Approve (success) + Reject with note (danger) + Send back to editor (outline); smm_approved -> Send to client (primary) + Reject with note (outline); client_sent -> Resend to client (outline). withBusy() wrapper toggles a single shared `busy` flag so all buttons disable while any async handler is in-flight (prevents double-clicks across approve/reject/send paths). Mobile (`lg:hidden`) is a fixed bottom bar with `paddingBottom: 'env(safe-area-inset-bottom)'` and `bg-surface/95 backdrop-blur` over a top border; desktop (`hidden lg:flex`) is a static card with the same buttons stacked vertically. Buttons use the local components/ui/button.tsx primitive (variants: success/danger/outline/primary). Icons from lucide-react. Returns null when state has no actions (e.g. `editing`). tsc + lint clean.
 
-[ ] T05: Build components/calendar/review/reject-dialog.tsx
+[x] T05: Build components/calendar/review/reject-dialog.tsx
     Files: components/calendar/review/reject-dialog.tsx
     Acceptance: modal (bottom sheet on mobile via existing dialog primitive). Textarea required, max 2000. Send button disabled until note has content. Calls cup-01 reject route on submit.
     Verify: `npx tsc --noEmit && npm run lint`
-    Notes:
+    Notes: 2026-05-16. Built. 'use client' wrapper over components/ui/dialog.tsx. Props: { open, dropId, sendBackToEditor?, onClose, onRejected? }. Required textarea hard-capped at 2000 chars via `value.slice(0, MAX_NOTE)`; trimmed length powers the disabled state on the send button (no whitespace-only submissions). Live `n/2000` counter under the field. Posts `{ note, targetState }` to /api/calendar/drops/[id]/handoff/reject (cup-01 T04 route); targetState is 'editing' when sendBackToEditor is true, else 'smm_rejected'. Error path renders inline red banner, success closes and invokes onRejected. Submitting state disables Cancel + send button (no double-submit, no close-mid-flight). Heading and CTA copy adapt: 'Reject with note' + danger button vs 'Send back to editor' + primary button. Bottom sheet behaviour on mobile is inherited from the Dialog primitive (which uses native <dialog> with backdrop). tsc + lint clean, no em/en dashes.
 
 [ ] T06: Build components/calendar/review/post-list-with-edit.tsx
     Files: components/calendar/review/post-list-with-edit.tsx
