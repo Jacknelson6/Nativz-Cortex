@@ -28,7 +28,7 @@ interface ShareLinkRow {
   token: string;
   drop_id: string;
   included_post_ids: string[];
-  revoked: boolean;
+  archived_at: string | null;
 }
 
 interface DropRow {
@@ -84,10 +84,10 @@ export default async function ReviewByTokenPage({
   const admin = createAdminClient();
   const { data: link } = await admin
     .from('content_drop_share_links')
-    .select('id, token, drop_id, included_post_ids, revoked')
+    .select('id, token, drop_id, included_post_ids, archived_at')
     .eq('token', token)
     .maybeSingle<ShareLinkRow>();
-  if (!link) notFound();
+  if (!link || link.archived_at) notFound();
 
   const { data: drop } = await admin
     .from('content_drops')

@@ -19,6 +19,8 @@ const baseURL =
 export default defineConfig({
   testDir: './tests',
   testMatch: '**/*.spec.ts',
+  globalSetup: require.resolve('./tests/global-setup'),
+  globalTeardown: require.resolve('./tests/global-teardown'),
   fullyParallel: true,
   globalTimeout: 30 * 60 * 1000,
   forbidOnly: !!process.env.CI,
