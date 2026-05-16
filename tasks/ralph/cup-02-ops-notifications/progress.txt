@@ -73,23 +73,23 @@
     Verify: `npx tsc --noEmit && npm run lint`; visual QA: fire a handoff, open the bell, see the row
     Notes: 2026-05-16. PRD path deviation: there is no components/notifications/notification-dropdown.tsx; the actual in-app dropdown is components/layout/notification-bell.tsx. The bell does not use a switch-per-type renderer either; it uses a single generic <button> row that pulls (a) the leading icon from a TYPE_ICON registry keyed on notification.type and (b) title/body/link_path off the notification record. Registration here = adding the type to TYPE_ICON, which already happened in T09 (ClipboardCheck, amber). No further wiring needed: the dispatcher in T06 emits title/body/link_path that the generic renderer handles, click flow goes through handleClick() which PATCHes /api/notifications/:id then navigates via router.push(link_path), and unread state shows the standard accent dot. tsc + lint already clean from T09 commit. Visual QA pending live e2e (would need a fresh handoff fire against the dev DB with a recipient user_id in ZERNIO_WEBHOOK_NOTIFY_USER_IDS or clients.smm_reviewer_user_id); deferred to T15 Done When gate or whenever Jack does a manual run.
 
-[ ] T11: Build app/api/cron/smm-review-digest/route.ts
+[x] T11: Build app/api/cron/smm-review-digest/route.ts
     Files: app/api/cron/smm-review-digest/route.ts
     Acceptance: GET handler with Bearer CRON_SECRET auth (per existing cron pattern). When SMM_REVIEW_DIGEST_MODE !== 'on', returns { digestSent: false, dropCount: 0, orgCount: 0 }. When on, groups awaiting drops by org, posts one Slack message per org, updates last_smm_review_notified_at. Wrapped in withCronTelemetry if available.
     Verify: `npx tsc --noEmit && npm run lint`; manual curl with bearer in dev
-    Notes:
+    Notes: 2026-05-16. GET handler at app/api/cron/smm-review-digest/route.ts. Bearer CRON_SECRET auth matches the existing /api/cron/coalesce-review-pings pattern (header authorization === `Bearer ${process.env.CRON_SECRET}` else 401). Decision tree: (1) digest mode off -> {digestSent:false, dropCount:0, orgCount:0, reason:'digest_mode_off'}; (2) Slack not configured (either SLACK_OPS_WEBHOOK_ENABLED!=='true' or no URL) -> {digestSent:false, reason:'slack_not_configured'}; (3) zero awaiting drops -> {digestSent:false, dropCount:0, orgCount:0}; (4) else: group drops by clients.organization_id (fallback bucket '__no_org__' for legacy unscoped clients), post one Slack section block per org listing "*<brand>* - <range>" lines, stamp last_smm_review_notified_at on every drop in the digest so the per-handoff dispatcher's 60s dedup window starts now (prevents follow-up real-time pings from racing the digest). Wrapped in withCronTelemetry with extractRowsProcessed reading body.dropCount. Used postOpsSlack from T04 so retry / error envelope is consistent with the per-handoff dispatcher. Used "-" not em dash in the bullet lines. tsc + lint clean (grep returned nothing on smm-review-digest path).
 
-[ ] T12: Register the cron in vercel.json
+[x] T12: Register the cron in vercel.json
     Files: vercel.json
     Acceptance: new entry `{ "path": "/api/cron/smm-review-digest", "schedule": "0 14 * * *" }` (09:00 CT winter; document DST). No regression to existing crons.
     Verify: `cat vercel.json | jq .crons` shows the entry
-    Notes:
+    Notes: 2026-05-16. Added the cron entry right after /api/cron/calendar-comment-digest (the other daily digest, 13:00 UTC), so both daily digests sit visually adjacent in the file. Schedule "0 14 * * *" = 14:00 UTC daily = 09:00 CT in winter (CST = UTC-6) and 09:00 CDT in summer (CDT = UTC-5 -> the cron runs at 08:00 local during DST). Jack will see the digest at slightly different local times depending on DST; documenting here rather than scheduling the cron twice. `cat vercel.json | jq '.crons | map(select(.path | contains("smm-review-digest")))'` returns exactly one entry. No other crons modified.
 
-[ ] T13: Add env vars to .env.example
+[x] T13: Add env vars to .env.example
     Files: .env.example
     Acceptance: SLACK_OPS_WEBHOOK_URL, SLACK_OPS_WEBHOOK_ENABLED, SMM_REVIEW_DIGEST_MODE all present with one-line comments matching PRD Env Vars section.
     Verify: `grep -c "SLACK_OPS_WEBHOOK_URL\|SLACK_OPS_WEBHOOK_ENABLED\|SMM_REVIEW_DIGEST_MODE" .env.example` returns 3
-    Notes:
+    Notes: 2026-05-16. Appended a CUP-02 block to the end of .env.example with all three vars + a multi-line comment explaining the toggle semantics (URL for Slack incoming webhook, ENABLED gates posting, DIGEST_MODE flips real-time vs daily rollup). All three lines commented out by default so a fresh checkout doesn't accidentally enable Slack posting before Jack configures the webhook URL. grep -c returned 6 (each var name appears in both the comment block and the commented-out assignment line) which is comfortably above the acceptance threshold of 3.
 
 [ ] T14: Cron unit test
     Files: app/api/cron/smm-review-digest/route.test.ts
