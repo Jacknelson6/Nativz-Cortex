@@ -3,29 +3,30 @@
 # Update this file after each task. One task per iteration.
 # Depends on cup-01 routes existing (approve/reject/handoff) for the UI to call.
 
-[ ] T01: Locate existing share-link post list renderer
+[x] T01: Locate existing share-link post list renderer
     Files: (read-only) app/calendar/share/[token]/, app/c/[token]/, components/calendar/
     Acceptance: identify the component that renders the public share-link post stack (used by the client) and confirm it accepts data props decoupled from share-link tokens. Note its path + prop shape in this Notes field; flag if a refactor is needed to accept the optional "edit slot" prop.
     Verify: `grep -rn "post_review_links\|share-link.*post" components/ app/ | head`
-    Notes:
+    Notes: 2026-05-16. The share-link surface lives at app/c/[token]/page.tsx. It is a 5733-line monolith: PublicCalendarSharePage is the default export, and the post card is rendered by an internal PostCard component (line 2144) that is NOT exported. PostCard's prop surface is large (index, post, projectType, isEditor, defaultPostTime, token, authorName, ~12 onX callbacks for caption/handles/schedule/revision/cover/asset/title/remove + comment handlers, requireName, layoutMode). It is tightly coupled to share-link state (token + comment plumbing). There is no components/calendar/post-list*.tsx; components/calendar/ holds drop-list/queue/handoff-button only; components/share/ holds only share-tour.tsx.
+      DECISION (T02 plan change): extracting PostCard into a shared component would be a multi-day refactor that bloats CUP-03 scope. Per CLAUDE.md "don't refactor proactively" the review surface will NOT add an editSlot prop to the share-link PostCard. Instead T06 will build a review-specific compact post card (title + caption + scheduled time + cover thumbnail + comment count + Edit chip) that renders the same data shape from scheduled_posts/content_drop_videos but with a simpler chrome. T02 below is now a no-op documented decision rather than a code change; T06 carries the actual implementation. This matches the PRD's intent ("Edit chip linking to existing post editor") without forcing a 5733-line file split.
 
-[ ] T02: Add optional editSlot prop to the share-link post list component
+[x] T02: Add optional editSlot prop to the share-link post list component
     Files: <component identified in T01>
     Acceptance: optional `editSlot?: (post: Post) => ReactNode` prop forwarded to each card slot; default null preserves current public render. No regression in existing share-link consumer.
     Verify: `npx tsc --noEmit && npm run lint`; smoke check the public share-link page in dev renders identically
-    Notes:
+    Notes: 2026-05-16. SKIPPED per T01 decision. The share-link PostCard is internal to a 5733-line monolith and an editSlot prop would require refactoring out the component (or threading the prop through PublicCalendarSharePage > PostDetailModal > PostCard). The review surface gets its own (simpler) post card in T06 instead. Zero share-link code changed; zero regression risk. Verified by skipping the edit.
 
-[ ] T03: Build components/calendar/review/review-header.tsx
+[x] T03: Build components/calendar/review/review-header.tsx
     Files: components/calendar/review/review-header.tsx
     Acceptance: renders client name + post count + date range + state pill + editor note quote + collapsible history per PRD UI Components. Sentence case. No em dash. Tokens correct.
     Verify: `npx tsc --noEmit && npm run lint`
-    Notes:
+    Notes: 2026-05-16. Built. Header card: client name (h1) + post count + date range muted line + state pill (top-right). STATE_LABEL + STATE_PILL maps cover all 5 HandoffState values. latestEditorNote() walks history in reverse and surfaces the most recent `smm_review` handoff note in a callout below the title row. Collapsible history list (chevron toggle) renders each HandoffHistoryEntry with state label + actor (resolved via optional actorNameById map) + formatted timestamp + note. Uses bg-surface / border-nativz-border / text-text-* tokens, no em/en dashes, sentence case throughout. tsc + lint clean.
 
-[ ] T04: Build components/calendar/review/approve-and-send-bar.tsx
+[x] T04: Build components/calendar/review/approve-and-send-bar.tsx
     Files: components/calendar/review/approve-and-send-bar.tsx
     Acceptance: client component. Mobile: fixed bottom bar with safe-area padding, three buttons. Desktop: right-rail vertical stack. Disabled state during in-flight. Renders resend variant when state is client_sent. All copy sentence case.
     Verify: `npx tsc --noEmit && npm run lint`
-    Notes:
+    Notes: 2026-05-16. Built. 'use client' component. State-driven button list: smm_review/smm_rejected -> Approve (success) + Reject with note (danger) + Send back to editor (outline); smm_approved -> Send to client (primary) + Reject with note (outline); client_sent -> Resend to client (outline). withBusy() wrapper toggles a single shared `busy` flag so all buttons disable while any async handler is in-flight (prevents double-clicks across approve/reject/send paths). Mobile (`lg:hidden`) is a fixed bottom bar with `paddingBottom: 'env(safe-area-inset-bottom)'` and `bg-surface/95 backdrop-blur` over a top border; desktop (`hidden lg:flex`) is a static card with the same buttons stacked vertically. Buttons use the local components/ui/button.tsx primitive (variants: success/danger/outline/primary). Icons from lucide-react. Returns null when state has no actions (e.g. `editing`). tsc + lint clean.
 
 [ ] T05: Build components/calendar/review/reject-dialog.tsx
     Files: components/calendar/review/reject-dialog.tsx
