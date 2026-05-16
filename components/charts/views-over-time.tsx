@@ -1,9 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Area,
-  Bar,
   ComposedChart,
   Line,
   ResponsiveContainer,
@@ -13,8 +12,6 @@ import {
 } from 'recharts';
 import { TrendingUp, SearchX } from 'lucide-react';
 import { Card } from '@/components/ui/card';
-import { formatNumber } from '@/lib/utils/format';
-import type { TopicSearchVideoRow } from '@/lib/scrapers/types';
 
 interface TrendsPoint {
   date: string;
@@ -36,31 +33,34 @@ interface TrendsResponse {
 interface ViewsOverTimeProps {
   searchId: string;
   shareToken?: string;
-  /**
-   * Optional, when provided we layer a faint "supply" series (count of new
-   * videos uploaded per day) behind the Google Trends demand line.
-   */
-  videos?: TopicSearchVideoRow[];
 }
 
-interface MergedPoint {
+interface ChartPoint {
   date: string;
-  interest: number | null;
-  videoCount: number | null;
+  interest: number;
 }
 
-function smoothCounts(counts: { date: string; count: number }[], window = 7) {
-  if (counts.length === 0) return counts.map((c) => ({ ...c, smoothed: 0 }));
-  return counts.map((c, i) => {
-    const start = Math.max(0, i - Math.floor(window / 2));
-    const end = Math.min(counts.length, i + Math.ceil(window / 2));
-    const slice = counts.slice(start, end);
-    const avg = slice.reduce((s, w) => s + w.count, 0) / slice.length;
-    return { ...c, smoothed: Math.round(avg * 10) / 10 };
-  });
+const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function formatTickLabel(d: string) {
+  const parts = d.split('-');
+  if (parts.length < 3) return d;
+  const month = MONTH_LABELS[Number(parts[1]) - 1] ?? parts[1];
+  const day = Number(parts[2]);
+  return `${month} ${day}`;
 }
 
-export function ViewsOverTime({ searchId, shareToken, videos }: ViewsOverTimeProps) {
+function formatTooltipLabel(label: unknown): string {
+  if (typeof label !== 'string') return '';
+  const parts = label.split('-');
+  if (parts.length < 3) return label;
+  const month = MONTH_LABELS[Number(parts[1]) - 1] ?? parts[1];
+  const day = Number(parts[2]);
+  const year = parts[0];
+  return `${month} ${day}, ${year}`;
+}
+
+export function ViewsOverTime({ searchId, shareToken }: ViewsOverTimeProps) {
   const [points, setPoints] = useState<TrendsPoint[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -98,44 +98,12 @@ export function ViewsOverTime({ searchId, shareToken, videos }: ViewsOverTimePro
     };
   }, [searchId, shareToken]);
 
-  const videoSupplyByDate = useMemo(() => {
-    if (!videos || videos.length === 0) return new Map<string, number>();
-    const counts = new Map<string, number>();
-    for (const v of videos) {
-      if (!v.publish_date) continue;
-      const day = v.publish_date.slice(0, 10);
-      counts.set(day, (counts.get(day) ?? 0) + 1);
-    }
-    const sorted = Array.from(counts.entries())
-      .map(([date, count]) => ({ date, count }))
-      .sort((a, b) => a.date.localeCompare(b.date));
-    const smoothed = smoothCounts(sorted, 7);
-    return new Map(smoothed.map((p) => [p.date, p.smoothed]));
-  }, [videos]);
-
-  const chartData = useMemo<MergedPoint[]>(() => {
-    const trendsPoints = points ?? [];
-    if (trendsPoints.length === 0) return [];
-    return trendsPoints.map((p) => ({
-      date: p.date,
-      interest: p.smoothed,
-      videoCount: videoSupplyByDate.get(p.date) ?? null,
-    }));
-  }, [points, videoSupplyByDate]);
-
-  const hasSupply = videoSupplyByDate.size > 0;
-  const maxSupply = useMemo(() => {
-    if (!hasSupply) return 0;
-    return Math.max(...Array.from(videoSupplyByDate.values()));
-  }, [videoSupplyByDate, hasSupply]);
-
   if (loading) return <ViewsOverTimeSkeleton />;
 
-  const formatDateLabel = (d: string) => {
-    const parts = d.split('-');
-    if (parts.length < 3) return d;
-    return `${parts[1]}/${parts[2]}`;
-  };
+  const chartData: ChartPoint[] = (points ?? []).map((p) => ({
+    date: p.date,
+    interest: p.smoothed,
+  }));
 
   const hasChart = !error && chartData.length > 0;
 
@@ -149,20 +117,12 @@ export function ViewsOverTime({ searchId, shareToken, videos }: ViewsOverTimePro
           </h3>
         </div>
         {hasChart && (
-          <div className="flex items-center gap-3 text-xs text-text-muted">
-            {hasSupply && (
-              <span className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-text-muted/40" />
-                Videos per day
-              </span>
-            )}
-            <span className="flex items-center gap-1.5">
-              <span
-                className="h-2 w-2 rounded-full"
-                style={{ background: 'var(--accent)' }}
-              />
-              Trend data{stale ? ', cached' : ''}
-            </span>
+          <div className="flex items-center gap-1.5 text-xs text-text-muted">
+            <span
+              className="h-2 w-2 rounded-full"
+              style={{ background: 'var(--accent)' }}
+            />
+            Trend data{stale ? ', cached' : ''}
           </div>
         )}
       </div>
@@ -184,15 +144,15 @@ export function ViewsOverTime({ searchId, shareToken, videos }: ViewsOverTimePro
               </defs>
               <XAxis
                 dataKey="date"
-                tick={{ fill: '#64748b', fontSize: 11 }}
+                tick={{ fill: '#94a3b8', fontSize: 11 }}
                 tickLine={false}
                 axisLine={{ stroke: '#2a2f45' }}
-                dy={8}
-                tickFormatter={formatDateLabel}
-                minTickGap={32}
+                dy={10}
+                tickFormatter={formatTickLabel}
+                minTickGap={48}
+                interval="preserveStartEnd"
               />
               <YAxis
-                yAxisId="interest"
                 tick={{ fill: '#64748b', fontSize: 11 }}
                 tickLine={false}
                 axisLine={false}
@@ -200,20 +160,6 @@ export function ViewsOverTime({ searchId, shareToken, videos }: ViewsOverTimePro
                 domain={[0, 100]}
                 tickFormatter={(v: number) => String(v)}
               />
-              {hasSupply && (
-                <YAxis
-                  yAxisId="supply"
-                  orientation="right"
-                  tick={{ fill: '#64748b', fontSize: 11 }}
-                  tickLine={false}
-                  axisLine={false}
-                  width={36}
-                  domain={[0, Math.max(4, Math.ceil(maxSupply * 1.2))]}
-                  tickFormatter={(v: number) =>
-                    v >= 1000 ? `${(v / 1000).toFixed(0)}k` : formatNumber(v)
-                  }
-                />
-              )}
               <Tooltip
                 contentStyle={{
                   backgroundColor: '#1a1d2e',
@@ -224,25 +170,10 @@ export function ViewsOverTime({ searchId, shareToken, videos }: ViewsOverTimePro
                   color: '#f1f5f9',
                 }}
                 labelStyle={{ color: '#f1f5f9', fontWeight: 600, marginBottom: 4 }}
-                formatter={(value, name) => {
-                  if (value === null || value === undefined) return ['—', name];
-                  if (name === 'interest') return [Math.round(Number(value)), 'Search interest'];
-                  if (name === 'videoCount') return [Math.round(Number(value) * 10) / 10, 'Videos per day'];
-                  return [String(value), name];
-                }}
+                labelFormatter={formatTooltipLabel}
+                formatter={(value) => [Math.round(Number(value)), 'Search interest']}
               />
-              {hasSupply && (
-                <Bar
-                  yAxisId="supply"
-                  dataKey="videoCount"
-                  fill="#64748b"
-                  fillOpacity={0.18}
-                  name="videoCount"
-                  isAnimationActive={false}
-                />
-              )}
               <Area
-                yAxisId="interest"
                 type="monotone"
                 dataKey="interest"
                 stroke="none"
@@ -250,7 +181,6 @@ export function ViewsOverTime({ searchId, shareToken, videos }: ViewsOverTimePro
                 tooltipType="none"
               />
               <Line
-                yAxisId="interest"
                 type="monotone"
                 dataKey="interest"
                 stroke="currentColor"
