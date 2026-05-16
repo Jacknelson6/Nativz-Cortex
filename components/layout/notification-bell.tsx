@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Bell, Check, Trash2, Lightbulb, FileText, MessageSquare, Settings2, Mail, Search, Camera, Clock, AlertTriangle, CheckCircle, TrendingUp, Flame, Users, RefreshCcw, Zap, WifiOff } from 'lucide-react';
+import { Bell, Check, Trash2, Lightbulb, FileText, MessageSquare, Settings2, Mail, Search, Camera, Clock, AlertTriangle, CheckCircle, TrendingUp, Flame, Users, RefreshCcw, Zap, WifiOff, ClipboardCheck } from 'lucide-react';
 import { formatRelativeTime } from '@/lib/utils/format';
 
 interface Notification {
@@ -31,6 +31,7 @@ const TYPE_ICON: Record<string, React.ReactNode> = {
   post_published: <CheckCircle size={14} className="text-emerald-400" />,
   post_failed: <AlertTriangle size={14} className="text-red-400" />,
   post_needs_approval: <Clock size={14} className="text-amber-400" />,
+  drop_smm_review_ready: <ClipboardCheck size={14} className="text-amber-400" />,
   post_trending: <Zap size={14} className="text-yellow-400" />,
   account_disconnected: <WifiOff size={14} className="text-amber-400" />,
   topic_search_failed: <AlertTriangle size={14} className="text-red-400" />,
