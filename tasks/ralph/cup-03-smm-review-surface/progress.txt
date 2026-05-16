@@ -34,11 +34,11 @@
     Verify: `npx tsc --noEmit && npm run lint`
     Notes: 2026-05-16. Built. 'use client' wrapper over components/ui/dialog.tsx. Props: { open, dropId, sendBackToEditor?, onClose, onRejected? }. Required textarea hard-capped at 2000 chars via `value.slice(0, MAX_NOTE)`; trimmed length powers the disabled state on the send button (no whitespace-only submissions). Live `n/2000` counter under the field. Posts `{ note, targetState }` to /api/calendar/drops/[id]/handoff/reject (cup-01 T04 route); targetState is 'editing' when sendBackToEditor is true, else 'smm_rejected'. Error path renders inline red banner, success closes and invokes onRejected. Submitting state disables Cancel + send button (no double-submit, no close-mid-flight). Heading and CTA copy adapt: 'Reject with note' + danger button vs 'Send back to editor' + primary button. Bottom sheet behaviour on mobile is inherited from the Dialog primitive (which uses native <dialog> with backdrop). tsc + lint clean, no em/en dashes.
 
-[ ] T06: Build components/calendar/review/post-list-with-edit.tsx
+[x] T06: Build components/calendar/review/post-list-with-edit.tsx
     Files: components/calendar/review/post-list-with-edit.tsx
     Acceptance: thin wrapper around the share-link post list component; passes editSlot that renders an "Edit" chip linking to the existing post editor with `?return=review&dropId=<id>`. No new card UI.
     Verify: `npx tsc --noEmit && npm run lint`
-    Notes:
+    Notes: 2026-05-16. Per T01/T02 decision NOT a wrapper around the share-link PostCard (5733-line monolith). Built as a review-specific compact list instead. Exports ReviewPost { id, title, caption, scheduledAt, coverImageUrl, commentCount } and PostListWithEdit({ dropId, posts, editorBasePath? }). Each li is `id=post-<id>` so the Edit chip can deep-link via hash. Cover thumb uses next/image with `unoptimized` (avoids the Vercel image-loader config). Edit chip is a Link to `<editorBasePath>?return=review&dropId=<id>&postId=<id>#post-<id>` — T07 reads `return=review` to route the save action back to the review surface. Layout: 80x80 cover thumb on the left, title/scheduled-time/comment-count row + 3-line clamp caption preview on the right. Empty state covered with a dashed border. Sentence case throughout, no em/en dashes, tokens (bg-surface, border-nativz-border, text-text-*). tsc + lint clean.
 
 [ ] T07: Honour ?return=review in the existing post editor
     Files: <post editor route; confirm path during build, likely under app/admin/calendar/>
