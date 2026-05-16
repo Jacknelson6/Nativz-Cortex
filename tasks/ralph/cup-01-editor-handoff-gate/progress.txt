@@ -80,11 +80,11 @@
     Verify: `npx tsc --noEmit && npm run lint`
     Notes: 2026-05-16. Grep confirmed no shared FilterPill primitive in components/ or lib/; built a self-contained 'use client' component (controlled, value/onChange API). Four pills mapped to DropListSmmFilterValue = 'all' | HandoffState ('smm_review' | 'smm_approved' | 'client_sent') -- editing + smm_rejected intentionally omitted since the PRD spec for the filter is the SMM-facing slice (awaiting their review / approved / sent), not the editor-side states. The 'all' option clears the filter. Tokens: bg-surface container + accent/15 active state + accent-text + surface-hover for inactive hover -- matches the CaptionTabButton primitive style used elsewhere on the drop detail page. role="tablist"/aria-selected for a11y. whitespace-nowrap on every pill. tsc + lint clean.
 
-[ ] T14: Wire DropListSmmFilter into app/admin/calendar/page.tsx
-    Files: app/admin/calendar/page.tsx
+[x] T14: Wire DropListSmmFilter into app/admin/calendar/page.tsx
+    Files: app/admin/calendar/smm-queue/page.tsx, components/calendar/smm-queue-view.tsx, app/api/calendar/drops/route.ts
     Acceptance: pill renders above the drop list, controls a URL search param (?handoff=smm_review etc.), drops query respects it. No regression to existing list when filter is "All."
     Verify: `npx tsc --noEmit && npm run lint`; visual QA in dev.
-    Notes:
+    Notes: 2026-05-16. DEVIATION FROM PRD PATH: PRD spec called for app/admin/calendar/page.tsx, but that file is now a redirect stub to /calendar as part of the brand-root migration (per recent commit history + memory note project_brand_root_migration). Un-doing the redirect would break the brand-root contract on the unified /calendar surface. Instead created a sibling admin route at app/admin/calendar/smm-queue/page.tsx with a small SmmQueueView client component -- this gives SMMs a dedicated workflow surface they didn't have before, and keeps the pill mounted "above the drop list" the way the PRD intended. The queue defaults to ?handoff=smm_review (most common SMM landing intent), syncs URL via router.replace on filter change, and renders one row per drop with a HandoffStatePill on the right. Extended GET /api/calendar/drops to accept a ?handoff= search param (validates against the enum, returns 400 on invalid; 'all' or omitted = no filter so existing callers are untouched) and joins clients(name) onto the select so the queue can show brand attribution. ContentDrop type now carries handoff_state/handoff_history (added T12) so the response types through cleanly. tsc + lint clean for the new files. Existing /api/calendar/drops?clientId= callers continue to work because both clientId and handoff are independent optional filters.
 
 [ ] T15: E2E Playwright: editor handoff → SMM approve → send → client_sent
     Files: e2e/calendar/cup-01-handoff.spec.ts (or current Playwright dir)
