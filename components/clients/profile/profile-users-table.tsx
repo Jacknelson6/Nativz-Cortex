@@ -4,22 +4,16 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
-  Check,
-  Copy,
-  KeyRound,
   Loader2,
   MoreHorizontal,
-  Pencil,
   Plus,
-  RotateCcw,
   Search,
-  Send,
   Star,
-  Trash2,
   User2,
   X,
 } from 'lucide-react';
 import { SectionCard, EditorField, editorInputClass } from './section-editor';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { formatRelativeTime } from '@/lib/utils/format';
 
 interface Contact {
@@ -84,6 +78,18 @@ function getInitials(name: string): string {
   return name.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2) || '?';
 }
 
+const STATE_LABEL: Record<RowState, string> = {
+  cortex_user: 'Portal access',
+  invited: 'Invite pending',
+  no_invite: 'No portal access',
+};
+
+const STATE_DOT: Record<RowState, string> = {
+  cortex_user: 'bg-emerald-400',
+  invited: 'bg-amber-400',
+  no_invite: 'bg-text-muted/40',
+};
+
 export function ProfileUsersTable({
   clientId,
   clientName,
@@ -114,6 +120,25 @@ export function ProfileUsersTable({
   const [dialog, setDialog] = useState<
     { mode: 'add' } | { mode: 'edit'; contact: Contact } | null
   >(null);
+
+  const { confirm: confirmRevoke, dialog: revokeDialog } = useConfirm({
+    title: 'Revoke this invite?',
+    description: 'The invite link will stop working immediately.',
+    confirmLabel: 'Revoke',
+    variant: 'danger',
+  });
+  const { confirm: confirmRemovePortal, dialog: removePortalDialog } = useConfirm({
+    title: 'Remove portal access?',
+    description: 'They will no longer be able to sign in to this client.',
+    confirmLabel: 'Remove access',
+    variant: 'danger',
+  });
+  const { confirm: confirmDeleteContact, dialog: deleteContactDialog } = useConfirm({
+    title: 'Remove this contact?',
+    description: "This can't be undone.",
+    confirmLabel: 'Remove',
+    variant: 'danger',
+  });
 
   const merged: MergedRow[] = useMemo(() => {
     const byEmail = new Map<string, MergedRow>();
@@ -192,9 +217,6 @@ export function ProfileUsersTable({
       const aPrimary = a.contact?.is_primary ? 1 : 0;
       const bPrimary = b.contact?.is_primary ? 1 : 0;
       if (aPrimary !== bPrimary) return bPrimary - aPrimary;
-      const stateRank = (s: RowState) => (s === 'cortex_user' ? 0 : s === 'invited' ? 1 : 2);
-      const sd = stateRank(a.state) - stateRank(b.state);
-      if (sd !== 0) return sd;
       return a.displayName.localeCompare(b.displayName);
     });
   }, [contacts, portalUsers, invites]);
@@ -211,6 +233,16 @@ export function ProfileUsersTable({
       );
     });
   }, [merged, query]);
+
+  const grouped = useMemo(() => {
+    const groups: Record<RowState, MergedRow[]> = {
+      cortex_user: [],
+      invited: [],
+      no_invite: [],
+    };
+    for (const row of filtered) groups[row.state].push(row);
+    return groups;
+  }, [filtered]);
 
   async function handleSendInvite(row: MergedRow) {
     const email = row.displayEmail || row.contact?.email;
@@ -242,7 +274,9 @@ export function ProfileUsersTable({
       }
       if (data.email_status === 'sent') toast.success(`Invite emailed to ${email}`);
       else if (data.email_status === 'failed') {
-        toast.warning(`Invite link created. Email send failed (${data.email_error ?? 'unknown'}). Copy the link and share manually.`);
+        toast.warning(
+          `Invite link created. Email send failed (${data.email_error ?? 'unknown'}). Copy the link and share manually.`,
+        );
       } else toast.success('Invite link created');
       router.refresh();
     } catch {
@@ -262,7 +296,7 @@ export function ProfileUsersTable({
 
   async function handleRevokeInvite(row: MergedRow) {
     if (!row.invite) return;
-    if (!confirm('Revoke this invite? The link stops working immediately.')) return;
+    if (!(await confirmRevoke())) return;
     setBusyAction(`revoke:${row.key}`);
     try {
       const res = await fetch(`/api/invites/${row.invite.id}`, { method: 'DELETE' });
@@ -302,7 +336,7 @@ export function ProfileUsersTable({
 
   async function handleRemovePortalAccess(row: MergedRow) {
     if (!row.portalUser) return;
-    if (!confirm(`Remove ${row.portalUser.full_name}'s portal access for this client?`)) return;
+    if (!(await confirmRemovePortal())) return;
     setBusyAction(`portal:${row.key}`);
     try {
       const res = await fetch(`/api/clients/${clientId}/portal-users/${row.portalUser.id}`, {
@@ -339,7 +373,7 @@ export function ProfileUsersTable({
 
   async function handleDeleteContact(row: MergedRow) {
     if (!row.contact) return;
-    if (!confirm(`Remove ${row.contact.name}? This can't be undone.`)) return;
+    if (!(await confirmDeleteContact())) return;
     setBusyAction(`delete:${row.key}`);
     try {
       const res = await fetch(`/api/clients/${clientId}/contacts/${row.contact.id}`, {
@@ -376,21 +410,47 @@ export function ProfileUsersTable({
         className="inline-flex items-center gap-1.5 rounded-full bg-accent px-3 py-1.5 text-[12px] font-medium text-white hover:bg-accent-hover transition-colors"
       >
         <Plus size={12} />
-        Invite
+        Add person
       </button>
     </div>
   );
+
+  function renderRow(row: MergedRow) {
+    return (
+      <UserRow
+        key={row.key}
+        row={row}
+        busy={busyAction}
+        copied={copiedKey === row.key}
+        onEdit={() => row.contact && setDialog({ mode: 'edit', contact: row.contact })}
+        onDelete={() => handleDeleteContact(row)}
+        onSetPrimary={() => handleSetPrimary(row)}
+        onSendInvite={() => handleSendInvite(row)}
+        onCopyInvite={() => handleCopyInvite(row)}
+        onRevokeInvite={() => handleRevokeInvite(row)}
+        onResetPassword={() => handleResetPassword(row)}
+        onRemovePortalAccess={() => handleRemovePortalAccess(row)}
+      />
+    );
+  }
+
+  const hasAny = filtered.length > 0;
+  const hasMultipleSections =
+    Number(grouped.cortex_user.length > 0) +
+      Number(grouped.invited.length > 0) +
+      Number(grouped.no_invite.length > 0) >
+    1;
 
   return (
     <>
       <SectionCard
         title="People"
-        description={`Everyone we talk to about ${clientName}, plus anyone with portal access. Send, resend, or revoke invites from the row menu.`}
+        description={`Everyone we talk to about ${clientName}, plus anyone with portal access.`}
         headerAction={headerAction}
-        bodyClassName="px-0 py-0"
+        bodyClassName="px-5 sm:px-6 py-5"
       >
-        {filtered.length === 0 ? (
-          <div className="px-5 sm:px-6 py-12 text-center">
+        {!hasAny ? (
+          <div className="py-10 text-center">
             <div className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-accent-surface text-accent-text mb-3">
               <User2 size={18} />
             </div>
@@ -404,31 +464,34 @@ export function ProfileUsersTable({
             </p>
           </div>
         ) : (
-          <div>
-            <div className="hidden sm:grid grid-cols-[1.4fr_1fr_0.9fr_2.5rem] gap-4 px-5 sm:px-6 py-2.5 text-[10.5px] font-medium uppercase tracking-[0.08em] text-text-muted border-b border-nativz-border/50 bg-background/30">
-              <div>Name</div>
-              <div>Email</div>
-              <div>Last active</div>
-              <div className="sr-only">Actions</div>
-            </div>
-            <ul className="divide-y divide-nativz-border/50">
-              {filtered.map((row) => (
-                <UserRow
-                  key={row.key}
-                  row={row}
-                  busy={busyAction}
-                  copied={copiedKey === row.key}
-                  onEdit={() => row.contact && setDialog({ mode: 'edit', contact: row.contact })}
-                  onDelete={() => handleDeleteContact(row)}
-                  onSetPrimary={() => handleSetPrimary(row)}
-                  onSendInvite={() => handleSendInvite(row)}
-                  onCopyInvite={() => handleCopyInvite(row)}
-                  onRevokeInvite={() => handleRevokeInvite(row)}
-                  onResetPassword={() => handleResetPassword(row)}
-                  onRemovePortalAccess={() => handleRemovePortalAccess(row)}
-                />
-              ))}
-            </ul>
+          <div className="space-y-6">
+            {grouped.cortex_user.length > 0 && (
+              <UserGroup
+                title="Portal access"
+                hint="Signed in to the client portal."
+                showTitle={hasMultipleSections}
+                rows={grouped.cortex_user}
+                render={renderRow}
+              />
+            )}
+            {grouped.invited.length > 0 && (
+              <UserGroup
+                title="Pending invites"
+                hint="Invite sent, not yet redeemed."
+                showTitle={hasMultipleSections}
+                rows={grouped.invited}
+                render={renderRow}
+              />
+            )}
+            {grouped.no_invite.length > 0 && (
+              <UserGroup
+                title="Contacts"
+                hint="People we talk to but who don't need portal access."
+                showTitle={hasMultipleSections}
+                rows={grouped.no_invite}
+                render={renderRow}
+              />
+            )}
           </div>
         )}
       </SectionCard>
@@ -446,7 +509,39 @@ export function ProfileUsersTable({
           }}
         />
       )}
+
+      {revokeDialog}
+      {removePortalDialog}
+      {deleteContactDialog}
     </>
+  );
+}
+
+function UserGroup({
+  title,
+  hint,
+  showTitle,
+  rows,
+  render,
+}: {
+  title: string;
+  hint: string;
+  showTitle: boolean;
+  rows: MergedRow[];
+  render: (row: MergedRow) => React.ReactNode;
+}) {
+  return (
+    <div className="space-y-2">
+      {showTitle && (
+        <div className="flex items-baseline justify-between">
+          <h3 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-text-muted">
+            {title}
+          </h3>
+          <span className="text-[11px] text-text-muted/70">{hint}</span>
+        </div>
+      )}
+      <div className="space-y-2">{rows.map(render)}</div>
+    </div>
   );
 }
 
@@ -476,22 +571,13 @@ function UserRow({
   onRemovePortalAccess: () => void;
 }) {
   const { contact, portalUser, state } = row;
-  const inviteBusy = busy === `invite:${row.key}`;
   const anyBusy = busy?.endsWith(`:${row.key}`) ?? false;
 
-  const stateMeta: Record<RowState, { dot: string; label: string }> = {
-    cortex_user: { dot: 'bg-emerald-400', label: 'Portal access' },
-    invited: { dot: 'bg-amber-400', label: 'Invite pending' },
-    no_invite: { dot: 'bg-text-muted/40', label: 'No portal access' },
-  };
-  const meta = stateMeta[state];
-
-  const lastActive =
-    portalUser?.last_login
-      ? formatRelativeTime(portalUser.last_login)
-      : state === 'invited'
-        ? 'Invite sent'
-        : 'Never';
+  const lastActive = portalUser?.last_login
+    ? `Last active ${formatRelativeTime(portalUser.last_login)}`
+    : state === 'invited'
+      ? 'Invite sent'
+      : null;
 
   const menuItems = useMemo(() => {
     const items: { label: string; onClick: () => void; destructive?: boolean }[] = [];
@@ -505,7 +591,11 @@ function UserRow({
     }
     if (state === 'cortex_user') {
       items.push({ label: 'Send reset link', onClick: onResetPassword });
-      items.push({ label: 'Remove portal access', onClick: onRemovePortalAccess, destructive: true });
+      items.push({
+        label: 'Remove portal access',
+        onClick: onRemovePortalAccess,
+        destructive: true,
+      });
     }
     if (contact) {
       items.push({ label: 'Edit contact', onClick: onEdit });
@@ -529,70 +619,61 @@ function UserRow({
     onDelete,
   ]);
 
+  const subtitleBits: React.ReactNode[] = [];
+  if (row.displayEmail) subtitleBits.push(<span key="email">{row.displayEmail}</span>);
+  if (contact?.project_role) subtitleBits.push(<span key="role">{contact.project_role}</span>);
+  if (lastActive) subtitleBits.push(<span key="last">{lastActive}</span>);
+
   return (
-    <li className="grid grid-cols-[1fr_2.5rem] sm:grid-cols-[1.4fr_1fr_0.9fr_2.5rem] items-center gap-4 px-5 sm:px-6 py-3.5 hover:bg-surface-hover/40 transition-colors">
-      <div className="flex items-center gap-3 min-w-0">
-        {portalUser?.avatar_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={portalUser.avatar_url}
-            alt={portalUser.full_name}
-            className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-nativz-border"
-          />
-        ) : (
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-surface text-[12px] font-semibold text-accent-text">
-            {getInitials(row.displayName || row.displayEmail || '?')}
-          </div>
-        )}
-        <div className="min-w-0">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <p className="text-[13px] font-medium text-text-primary truncate">
-              {row.displayName || row.displayEmail || 'Unnamed'}
-            </p>
-            {contact?.is_primary && (
-              <span title="Primary contact" className="text-amber-300 shrink-0">
-                <Star size={11} className="fill-current" />
+    <div className="flex items-center gap-4 rounded-xl border border-nativz-border bg-surface px-4 py-3.5 transition-colors hover:border-nativz-border/80">
+      {portalUser?.avatar_url ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={portalUser.avatar_url}
+          alt={portalUser.full_name}
+          className="h-10 w-10 shrink-0 rounded-full object-cover ring-1 ring-nativz-border"
+        />
+      ) : (
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-surface text-[12px] font-semibold text-accent-text ring-1 ring-inset ring-accent/15">
+          {getInitials(row.displayName || row.displayEmail || '?')}
+        </div>
+      )}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <h3 className="truncate text-[13px] font-semibold text-text-primary leading-tight">
+            {row.displayName || row.displayEmail || 'Unnamed'}
+          </h3>
+          {contact?.is_primary && (
+            <span title="Primary contact" className="text-amber-300 shrink-0">
+              <Star size={11} className="fill-current" />
+            </span>
+          )}
+          <span className="inline-flex items-center gap-1.5 text-[11px] text-text-muted">
+            <span className={`h-1.5 w-1.5 rounded-full ${STATE_DOT[state]}`} />
+            {STATE_LABEL[state]}
+          </span>
+        </div>
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] text-text-muted leading-relaxed">
+          {subtitleBits.length > 0 ? (
+            subtitleBits.map((bit, i) => (
+              <span key={i} className="inline-flex items-center gap-2">
+                {i > 0 && <span className="text-nativz-border">·</span>}
+                {bit}
               </span>
-            )}
-          </div>
-          <div className="mt-0.5 flex items-center gap-1.5 text-[11.5px] text-text-muted">
-            <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
-            <span className="truncate">{meta.label}</span>
-            {contact?.project_role && (
-              <>
-                <span className="text-nativz-border">·</span>
-                <span className="truncate">{contact.project_role}</span>
-              </>
-            )}
-          </div>
-          {/* Mobile: collapse email + last active into the same column */}
-          <div className="sm:hidden mt-1.5 space-y-0.5 text-[11.5px] text-text-muted">
-            {row.displayEmail && <p className="truncate">{row.displayEmail}</p>}
-            <p>Last active: {lastActive}</p>
-          </div>
+            ))
+          ) : (
+            <span>No email on file</span>
+          )}
         </div>
       </div>
-
-      <div className="hidden sm:block min-w-0 text-[12.5px] text-text-secondary truncate">
-        {row.displayEmail || <span className="text-text-muted/60">No email</span>}
-      </div>
-
-      <div className="hidden sm:block text-[12px] text-text-muted truncate">{lastActive}</div>
-
-      <div className="flex items-center justify-end">
+      <div className="flex shrink-0 items-center gap-1">
         {anyBusy ? (
           <Loader2 size={14} className="animate-spin text-text-muted" />
         ) : (
           <RowMenu items={menuItems} />
         )}
       </div>
-
-      {/* Inline 'Send invite' surface still wanted on no-email rows so the
-          user gets a hint why the menu's primary action is disabled — but
-          for now the menu carries it, no extra inline button. inviteBusy
-          spinner is covered by the anyBusy check above. */}
-      {inviteBusy && null}
-    </li>
+    </div>
   );
 }
 
@@ -627,7 +708,7 @@ function RowMenu({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex h-7 w-7 items-center justify-center rounded-md text-text-muted hover:text-text-primary hover:bg-surface-hover transition-colors"
+        className="rounded-md p-1.5 text-text-muted hover:text-text-primary hover:bg-surface-hover transition-colors"
         aria-label="Open actions"
         aria-haspopup="menu"
         aria-expanded={open}

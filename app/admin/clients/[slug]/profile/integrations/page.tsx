@@ -70,7 +70,7 @@ export default async function ProfileIntegrationsPage({
         eyebrow="Brand profile"
         icon={Plug}
         title="Integrations"
-        subtitle="Where Cortex pulls data from and pushes events to. Edit inline, save per section."
+        subtitle="Where Cortex pulls data from and pushes events to."
       />
 
       <SocialAccountsEditor
