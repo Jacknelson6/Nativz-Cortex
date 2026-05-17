@@ -9,12 +9,8 @@ import {
 const KNOWN_SERVICES = [
   'SMM',
   'Editing',
-  'Strategy',
-  'Production',
-  'Ads',
-  'Email',
-  'Web',
-  'Photo',
+  'Paid Media',
+  'Affiliates',
 ] as const;
 
 type ServicesDraft = { services: string[] };
