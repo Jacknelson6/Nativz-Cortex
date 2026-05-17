@@ -12,6 +12,11 @@ import {
 } from '@/lib/email/resend';
 import { getClientNotificationRecipients } from '@/lib/email/notification-recipients';
 import { archiveShareLinkEmail } from '@/lib/content-tools/archive-share-email';
+import {
+  appendHistory,
+  type HandoffHistoryEntry,
+  type HandoffState,
+} from '@/lib/calendar/handoff-state';
 
 /**
  * GET /api/calendar/share/[token]/send?variant=initial|revised
@@ -59,6 +64,8 @@ interface DropRow {
   client_id: string;
   start_date: string | null;
   end_date: string | null;
+  handoff_state: HandoffState;
+  handoff_history: HandoffHistoryEntry[] | null;
   clients: {
     id: string;
     name: string;
@@ -95,7 +102,9 @@ async function loadSendContext(token: string) {
 
   const { data: drop } = await admin
     .from('content_drops')
-    .select('id, client_id, start_date, end_date, clients(id, name, agency)')
+    .select(
+      'id, client_id, start_date, end_date, handoff_state, handoff_history, clients(id, name, agency)',
+    )
     .eq('id', link.drop_id)
     .single<DropRow>();
   if (!drop) {
@@ -120,6 +129,7 @@ async function loadSendContext(token: string) {
     userId: user.id,
     userEmail: user.email ?? null,
     link,
+    drop,
     clientId,
     clientName,
     agency,
@@ -269,7 +279,28 @@ export async function POST(
   const ctxResult = await loadSendContext(token);
   if ('error' in ctxResult) return ctxResult.error;
 
-  const { admin, userId, userEmail, link, clientId, clientName, agency, eligible, postCount, startDate, endDate } = ctxResult;
+  const { admin, userId, userEmail, link, drop, clientId, clientName, agency, eligible, postCount, startDate, endDate } = ctxResult;
+
+  // CUP-01 precondition: a share link can only be sent to the client when
+  // the drop has cleared SMM review. smm_approved is the green-light state;
+  // client_sent is allowed too so re-sends and follow-up emails still work.
+  if (drop.handoff_state !== 'smm_approved' && drop.handoff_state !== 'client_sent') {
+    return NextResponse.json(
+      {
+        error: 'drop has not been approved by the SMM yet',
+        handoff_state: drop.handoff_state,
+        hint:
+          drop.handoff_state === 'editing'
+            ? 'editor has not handed this drop off yet'
+            : drop.handoff_state === 'smm_review'
+              ? 'awaiting SMM review, approve before sending'
+              : drop.handoff_state === 'smm_rejected'
+                ? 'this drop was rejected, resolve and resubmit before sending'
+                : `cannot send a drop in state ${drop.handoff_state}`,
+      },
+      { status: 409 },
+    );
+  }
 
   if (eligible.length === 0) {
     return NextResponse.json(
@@ -387,6 +418,43 @@ export async function POST(
     .eq('id', link.id);
   if (stampError) {
     return NextResponse.json({ error: stampError.message }, { status: 500 });
+  }
+
+  // CUP-01: mirror the send into handoff_state. Idempotent against re-sends
+  // (client_sent -> client_sent is the only legal self-transition) so a
+  // second send-route hit just appends another history entry instead of
+  // throwing. We don't gate on canTransition here because we already
+  // refused everything except smm_approved/client_sent above.
+  if (drop.handoff_state !== 'client_sent') {
+    const nextHistory = appendHistory(drop.handoff_history ?? [], {
+      state: 'client_sent',
+      actor: userId,
+      note: 'share-link send route stamped client_sent',
+    });
+    const { error: handoffError } = await admin
+      .from('content_drops')
+      .update({
+        handoff_state: 'client_sent',
+        handoff_history: nextHistory,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', drop.id);
+    if (handoffError) {
+      return NextResponse.json({ error: handoffError.message }, { status: 500 });
+    }
+  } else {
+    const nextHistory = appendHistory(drop.handoff_history ?? [], {
+      state: 'client_sent',
+      actor: userId,
+      note: 'share-link re-send (idempotent)',
+    });
+    await admin
+      .from('content_drops')
+      .update({
+        handoff_history: nextHistory,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', drop.id);
   }
 
   // Best-effort archive of the rendered email so the unified review modal

@@ -13,6 +13,7 @@ import {
   X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ClientLogo } from '@/components/clients/client-logo';
 
 interface HistoryPlatform {
   platform: string;
@@ -134,7 +135,7 @@ export function PostingHistoryTab() {
         </div>
       ) : rows.length === 0 ? (
         <div className="rounded-xl border border-nativz-border bg-surface py-16 text-center text-sm text-text-muted">
-          No posts in this view yet. Once approved drops publish, they'll log here.
+          No posts in this view yet. Once approved drops publish, they&apos;ll log here.
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border border-nativz-border bg-surface">
@@ -187,16 +188,12 @@ function HistoryRowItem({
     <tr className="border-t border-nativz-border align-top transition-colors hover:bg-surface-hover/30">
       <td className="px-4 py-3">
         <div className="flex items-center gap-2">
-          {row.client_logo_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={row.client_logo_url}
-              alt={row.client_name ?? ''}
-              className="h-7 w-7 rounded-full object-cover"
-            />
-          ) : (
-            <div className="h-7 w-7 rounded-full bg-surface-hover" />
-          )}
+          <ClientLogo
+            src={row.client_logo_url}
+            name={row.client_name ?? ''}
+            size="sm"
+            className="!h-7 !w-7"
+          />
           <span className="truncate font-medium text-text-primary">
             {row.client_name ?? '—'}
           </span>

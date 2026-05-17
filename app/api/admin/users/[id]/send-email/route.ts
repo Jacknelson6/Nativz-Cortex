@@ -4,7 +4,7 @@ import { requireAdmin } from '@/lib/api/require-admin';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendUserEmail } from '@/lib/email/send-user-email';
 import { resolveMergeContext } from '@/lib/email/resolve-merge-context';
-import { detectAgencyFromHostname } from '@/lib/agency/detect';
+import { resolveAgencyForUser } from '@/lib/email/resolve-agency-for-user';
 
 export const maxDuration = 30;
 
@@ -44,7 +44,13 @@ export async function POST(
     full_name: auth.adminRow.full_name,
   });
 
-  const agency = detectAgencyFromHostname(request.headers.get('host') ?? '');
+  // Resolve agency from the recipient's client (post-Victory: never
+  // host-detect the admin's view, that's "where I am," not "who I'm
+  // emailing"). Falls back to hostname for users with no org.
+  const agency = await resolveAgencyForUser(admin, {
+    userId: recipientId,
+    hostname: request.headers.get('host') ?? '',
+  });
 
   const send = await sendUserEmail({
     to: recipient.email,

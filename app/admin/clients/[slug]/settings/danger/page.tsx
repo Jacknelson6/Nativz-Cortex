@@ -1,10 +1,10 @@
-import { DangerSettingsView } from '@/components/clients/settings/danger-settings-view';
+import { redirect } from 'next/navigation';
 
-export default async function ClientSettingsDangerPage({
+export default async function ClientSettingsDangerRedirect({
   params,
 }: {
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  return <DangerSettingsView slug={slug} />;
+  redirect(`/admin/clients/${slug}/profile/overview`);
 }

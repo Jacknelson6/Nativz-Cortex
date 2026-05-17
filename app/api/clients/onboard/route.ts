@@ -23,7 +23,13 @@ const onboardSchema = z.object({
   topic_keywords: z.array(z.string()).optional().default([]),
   logo_url: z.string().nullable().optional().default(null),
   services: z.array(z.string()).optional().default([]),
-  agency: z.string().optional().default(''),
+  // Required post-Victory incident: a missing agency tag silently routed
+  // an AC client's onboarding emails through Nativz branding. Every client
+  // must be tagged at creation. UI submits "Nativz" or "Anderson
+  // Collaborative"; anything else is rejected here.
+  agency: z.enum(['Nativz', 'Anderson Collaborative'], {
+    message: 'agency must be "Nativz" or "Anderson Collaborative"',
+  }),
   // Brand essence + voice + content prefs auto-filled from analyze-url.
   // All optional so manual onboards (no analyze step) still validate.
   tagline: z.string().trim().max(500).optional().default(''),
@@ -154,7 +160,7 @@ export async function POST(request: NextRequest) {
             // Persist the agency picked in the onboard wizard so the client
             // detail page, branded PDF, and email digests all resolve to
             // the right brand (Nativz vs Anderson Collaborative).
-            agency: data.agency || null,
+            agency: data.agency,
             tagline: data.tagline || null,
             value_proposition: data.value_proposition || null,
             mission_statement: data.mission_statement || null,

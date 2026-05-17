@@ -10,6 +10,11 @@ export const dynamic = 'force-dynamic';
 const RequestSchema = z.object({
   source: z.enum(['brand_audit', 'prospect_audit']),
   source_id: z.string().uuid(),
+  // Required agency tag — post-Victory incident hardening. Persisted on
+  // the prospect row so conversion forwards the right brand to clients.
+  agency: z.enum(['Nativz', 'Anderson Collaborative'], {
+    message: 'agency must be "Nativz" or "Anderson Collaborative"',
+  }),
 });
 
 export async function POST(req: Request) {
@@ -65,6 +70,7 @@ export async function POST(req: Request) {
       lifecycle_state: 'audited',
       created_by: userId,
       owner_user_id: userId,
+      agency: parsed.data.agency,
     })
     .select('*')
     .single();

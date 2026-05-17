@@ -5,7 +5,7 @@ import { buildUserEmailHtml } from '@/lib/email/templates/user-email';
 import { resolveMergeFields } from '@/lib/email/merge-fields';
 import { getSecret } from '@/lib/secrets/store';
 import type { MergeContext } from '@/lib/email/types';
-import type { AgencyBrand } from '@/lib/agency/detect';
+import { getBrandFromAgency, type AgencyBrand } from '@/lib/agency/detect';
 
 let _resend: Resend | null = null;
 let _resendKey: string | undefined;
@@ -179,11 +179,12 @@ export async function resolveCampaignRecipients(
       type ClientRel = { name: string | null; agency: string | null } | { name: string | null; agency: string | null }[] | null;
       const rel = r.client as ClientRel;
       const clientRow = Array.isArray(rel) ? rel[0] : rel;
+      // Single source of truth — getBrandFromAgency throws in non-prod
+      // for null/unknown, soft-falls to 'nativz' with console.error in
+      // prod. Migration 318's NOT NULL + CHECK on clients.agency makes
+      // the null branch defense-in-depth only.
       const agency: AgencyBrand =
-        opts.agencyOverride ??
-        (clientRow?.agency?.toLowerCase().includes('anderson') || clientRow?.agency?.toLowerCase() === 'ac'
-          ? 'anderson'
-          : 'nativz');
+        opts.agencyOverride ?? getBrandFromAgency(clientRow?.agency ?? null);
       recipients.push({
         contact_id: r.id,
         email: r.email,
@@ -218,10 +219,7 @@ export async function resolveCampaignRecipients(
       const access = accessRows?.[0];
       const accessClient = Array.isArray(access?.clients) ? access?.clients[0] : access?.clients;
       const agency: AgencyBrand =
-        opts.agencyOverride ??
-        (accessClient?.agency?.toLowerCase().includes('anderson') || accessClient?.agency?.toLowerCase() === 'ac'
-          ? 'anderson'
-          : 'nativz');
+        opts.agencyOverride ?? getBrandFromAgency(accessClient?.agency ?? null);
       recipients.push({
         contact_id: null,
         email: u.email,

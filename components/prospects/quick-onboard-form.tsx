@@ -8,11 +8,14 @@
 // flow. After save, we hand off to /admin/prospects/[id].
 
 import { useCallback, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { AlertTriangle, Globe, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PlatformConfirmRow, type ConfirmRowPlatform } from './platform-confirm-row';
+import { useBrandMode } from '@/components/layout/brand-mode-provider';
+
+type AgencyChoice = 'Nativz' | 'Anderson Collaborative';
 
 type Step = 'idle' | 'detecting' | 'confirm' | 'done' | 'error';
 
@@ -61,7 +64,26 @@ function emptyRow(): RowState {
 
 export function QuickOnboardForm() {
   const router = useRouter();
-  const [url, setUrl] = useState('');
+  const searchParams = useSearchParams();
+  const { mode: brandMode } = useBrandMode();
+  // Prefill from query params — the client onboard wizard forwards
+  // brand name + URL + agency here when the user picks "Prospect" so
+  // they don't retype.
+  const prefillUrl = searchParams?.get('prefill_url') ?? '';
+  const prefillName = searchParams?.get('prefill_name') ?? '';
+  const prefillAgencyParam = searchParams?.get('prefill_agency');
+  const prefillAgency: AgencyChoice | null =
+    prefillAgencyParam === 'Anderson Collaborative' || prefillAgencyParam === 'Nativz'
+      ? prefillAgencyParam
+      : null;
+  const [url, setUrl] = useState(prefillUrl);
+  // Required tag: every prospect MUST be filed under an agency at creation
+  // so downstream emails / share links / PDFs brand correctly. Defaults to
+  // the prefill (if forwarded from the client onboard wizard) or the
+  // current dashboard brand mode. Post-Victory incident hardening.
+  const [agency, setAgency] = useState<AgencyChoice>(
+    prefillAgency ?? (brandMode === 'anderson' ? 'Anderson Collaborative' : 'Nativz'),
+  );
   const [step, setStep] = useState<Step>('idle');
   const [detection, setDetection] = useState<DetectionResponse | null>(null);
   const [rows, setRows] = useState<Record<ConfirmRowPlatform, RowState>>({
@@ -70,7 +92,7 @@ export function QuickOnboardForm() {
     youtube: emptyRow(),
     facebook: emptyRow(),
   });
-  const [brandName, setBrandName] = useState('');
+  const [brandName, setBrandName] = useState(prefillName);
   const [websiteUrl, setWebsiteUrl] = useState('');
   const [primary, setPrimary] = useState<ConfirmRowPlatform | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -83,7 +105,7 @@ export function QuickOnboardForm() {
       const res = await fetch('/api/prospects/onboard', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: url.trim() }),
+        body: JSON.stringify({ url: url.trim(), agency }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({ error: 'Unknown error' }));
@@ -133,7 +155,7 @@ export function QuickOnboardForm() {
       setErrorMessage(message);
       setStep('error');
     }
-  }, [router, url]);
+  }, [router, url, agency]);
 
   const handleSave = useCallback(async () => {
     if (!detection) return;
@@ -208,6 +230,34 @@ export function QuickOnboardForm() {
           }}
           className="flex flex-col gap-3 rounded-md border border-border bg-surface p-4"
         >
+          <div>
+            <p className="mb-1.5 text-xs font-medium text-text-muted">Agency</p>
+            <div
+              role="radiogroup"
+              aria-label="Agency"
+              className="inline-flex w-full rounded-md border border-border bg-background p-1"
+            >
+              {(['Nativz', 'Anderson Collaborative'] as const).map((value) => {
+                const selected = agency === value;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    onClick={() => setAgency(value)}
+                    className={`flex-1 rounded px-3 py-1.5 text-xs font-medium transition-colors ${
+                      selected
+                        ? 'bg-accent/15 text-accent'
+                        : 'text-text-muted hover:text-foreground'
+                    }`}
+                  >
+                    {value === 'Anderson Collaborative' ? 'Anderson' : value}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           <label htmlFor="seed-url" className="text-sm font-medium text-foreground">
             Paste a website or social profile URL
           </label>
@@ -278,7 +328,7 @@ export function QuickOnboardForm() {
             <div className="flex items-start gap-2 rounded-md border border-amber-400/40 bg-amber-400/5 p-3 text-xs text-amber-200">
               <AlertTriangle size={14} className="mt-0.5 shrink-0" />
               <div>
-                <div className="font-medium">Auto-detect couldn't reach the site.</div>
+                <div className="font-medium">Auto-detect couldn&apos;t reach the site.</div>
                 <div className="text-amber-200/80">
                   {detection.detection.detection_message ?? 'Add socials manually below or save bare.'}
                 </div>

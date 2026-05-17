@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { OnboardProgress } from '@/components/onboard/onboard-progress';
 import { OnboardInput } from '@/components/onboard/onboard-input';
@@ -10,16 +11,18 @@ import { OnboardReview } from '@/components/onboard/onboard-review';
 import type { OnboardStep, OnboardFormData } from '@/lib/types/strategy';
 
 export default function OnboardWizardPage() {
+  const router = useRouter();
   const [currentStep, setCurrentStep] = useState<OnboardStep>('input');
   const [completedSteps, setCompletedSteps] = useState<OnboardStep[]>([]);
 
   // State across steps
   const [inputData, setInputData] = useState<
-    Pick<OnboardFormData, 'name' | 'website_url' | 'lifecycle_state'>
+    Pick<OnboardFormData, 'name' | 'website_url' | 'lifecycle_state' | 'agency'>
   >({
     name: '',
     website_url: '',
     lifecycle_state: 'lead',
+    agency: 'Nativz',
   });
   const [formData, setFormData] = useState<OnboardFormData | null>(null);
   const [clientId, setClientId] = useState('');
@@ -35,10 +38,26 @@ export default function OnboardWizardPage() {
     setCompletedSteps((prev) => (prev.includes(step) ? prev : [...prev, step]));
   }
 
-  // Step 1 → Step 2
+  // Step 1 → next, branched on lifecycle_state. The wizard's analyze /
+  // strategy / review steps only make sense for brands we're actually
+  // building strategy for, so the Prospect branch bails to the quick-add
+  // surface where URL paste + social detection are first-class. The
+  // Onboarding branch continues through the wizard and creates the
+  // onboarding row when the review step lands.
   function handleInputNext(
-    data: Pick<OnboardFormData, 'name' | 'website_url' | 'lifecycle_state'>,
+    data: Pick<OnboardFormData, 'name' | 'website_url' | 'lifecycle_state' | 'agency'>,
   ) {
+    if (data.lifecycle_state === 'lead') {
+      // Forward name + URL + agency to the prospect quick-add so they
+      // don't retype. QuickOnboardForm reads these via searchParams.
+      const params = new URLSearchParams({
+        prefill_name: data.name,
+        prefill_url: data.website_url,
+        prefill_agency: data.agency,
+      });
+      router.push(`/admin/prospects/new?${params.toString()}`);
+      return;
+    }
     setInputData(data);
     completeStep('input');
     setCurrentStep('analyze');
@@ -52,9 +71,17 @@ export default function OnboardWizardPage() {
   const handleAnalyzeNext = useCallback(async (data: OnboardFormData) => {
     if (onboardInFlight.current) return;
     onboardInFlight.current = true;
-    // Forward the lifecycle_state captured in step 1; analyze step doesn't
-    // collect it, so merge it back in here before the POST.
-    const requestBody = { ...data, lifecycle_state: inputData.lifecycle_state };
+    // Forward the lifecycle_state + agency captured in step 1; analyze step
+    // doesn't collect those, so merge them back in here before the POST.
+    // 'onboarding' isn't a clients.lifecycle_state value — the onboardings
+    // row carries that, so the client itself goes in as 'active'.
+    const clientLifecycle =
+      inputData.lifecycle_state === 'onboarding' ? 'active' : inputData.lifecycle_state;
+    const requestBody = {
+      ...data,
+      lifecycle_state: clientLifecycle,
+      agency: inputData.agency,
+    };
     setFormData(data);
     try {
       const res = await fetch('/api/clients/onboard', {
@@ -80,14 +107,41 @@ export default function OnboardWizardPage() {
         toast.warning(`Monday.com board skipped: ${payload.monday.error ?? 'unknown error'}`);
       }
 
-      setClientId(payload.cortex.clientId);
+      const newClientId = payload.cortex.clientId as string;
+      setClientId(newClientId);
+
+      // Onboarding branch: spin up the onboarding row immediately and
+      // redirect to its detail page. Skip the strategy/review steps —
+      // the onboarding surface is its own flow (welcome email, milestones,
+      // requirements). Kind defaults to 'smm'; admin can change in detail.
+      if (inputData.lifecycle_state === 'onboarding') {
+        try {
+          const onbRes = await fetch('/api/admin/onboardings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ client_id: newClientId, kind: 'smm', send_welcome: false }),
+          });
+          const onbPayload = await onbRes.json().catch(() => null);
+          if (onbRes.ok && onbPayload?.row?.id) {
+            router.push(`/admin/onboarding/${onbPayload.row.id}`);
+            return;
+          }
+          // Fall through to the strategy step so the admin still has a
+          // landing surface and can kick off onboarding manually from
+          // /admin/onboarding.
+          toast.error(onbPayload?.error ?? 'Onboarding row create failed; continuing with strategy step.');
+        } catch {
+          toast.error('Onboarding row create failed; continuing with strategy step.');
+        }
+      }
+
       completeStep('analyze');
       setCurrentStep('strategy');
     } catch {
       toast.error('Something went wrong creating the client, try again.');
       onboardInFlight.current = false;
     }
-  }, [inputData.lifecycle_state]);
+  }, [inputData.lifecycle_state, inputData.agency, router]);
 
   // Step 3 → Step 4
   const handleStrategyNext = useCallback((id: string) => {

@@ -28,8 +28,10 @@ import {
   describeProgress,
   getOnboardingByToken,
   patchStepState,
+  replaceClientProductsFromOnboarding,
   syncBrandBasicsToClient,
 } from '@/lib/onboarding/api';
+import type { ProductEntry } from '@/lib/onboarding/types';
 import { SCREENS, doneIndex } from '@/lib/onboarding/screens';
 import { getBrandFromAgency } from '@/lib/agency/detect';
 import { notifyMilestones } from '@/lib/onboarding/milestones';
@@ -89,7 +91,7 @@ async function loadClient(client_id: string): Promise<PublicClientView | null> {
   const { data } = await admin
     .from('clients')
     .select(
-      'id, name, agency, tagline, products, target_audience, brand_voice, current_offers, website_url, logo_url',
+      'id, name, agency, tagline, target_audience, brand_voice, current_offers, website_url, logo_url',
     )
     .eq('id', client_id)
     .single<{
@@ -97,7 +99,6 @@ async function loadClient(client_id: string): Promise<PublicClientView | null> {
       name: string | null;
       agency: string | null;
       tagline: string | null;
-      products: string | null;
       target_audience: string | null;
       brand_voice: string | null;
       current_offers: string | null;
@@ -111,7 +112,8 @@ async function loadClient(client_id: string): Promise<PublicClientView | null> {
     agency: getBrandFromAgency(data.agency),
     brand: {
       tagline: data.tagline,
-      what_we_sell: data.products,
+      // Products live in `client_products`, not on the clients row.
+      what_we_sell: null,
       audience: data.target_audience,
       voice: data.brand_voice,
       current_offers: data.current_offers,
@@ -201,6 +203,25 @@ export async function PATCH(
         await syncBrandBasicsToClient({
           client_id: row.client_id,
           basics: basics as Parameters<typeof syncBrandBasicsToClient>[0]['basics'],
+        });
+      }
+
+      // products → client_products. Replaces any prior onboarding-uploaded
+      // rows; admin-created rows (source='manual') are left alone.
+      const productsPatch = (parsed.data.step_state as Record<string, unknown>).products;
+      if (productsPatch && typeof productsPatch === 'object') {
+        const list = (productsPatch as { products?: ProductEntry[] }).products ?? [];
+        const cleaned = list
+          .map((p) => ({
+            title: (p.title ?? '').trim(),
+            url: p.url?.trim() || null,
+            price_cents: p.price_cents ?? null,
+            currency: p.currency?.trim() || null,
+          }))
+          .filter((p) => p.title.length > 0);
+        await replaceClientProductsFromOnboarding({
+          client_id: row.client_id,
+          products: cleaned,
         });
       }
     }

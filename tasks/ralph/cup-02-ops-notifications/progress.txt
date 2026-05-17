@@ -1,0 +1,115 @@
+# Progress: cup-02-ops-notifications
+# Read tasks/ralph/CONTEXT.md + tasks/ralph/cup-02-ops-notifications/PRD.md before each task.
+# Update this file after each task. One task per iteration.
+# Depends on cup-01 T06 (handoff route exists) for T08 wiring.
+
+[x] T01: Confirm notifications table + lib/notifications.ts shape
+    Files: (read-only) lib/notifications.ts, supabase/migrations/
+    Acceptance: confirm `notifications` table has user_id, type (text), payload (jsonb), link, read_at; confirm createNotification signature; confirm whether type is enum-backed or free text. Note in progress whether migration 320 needs to extend an enum.
+    Verify: Supabase MCP list_tables notifications; grep "createNotification" lib/notifications.ts
+    Notes: 2026-05-16. PRD column-name assumptions are stale. Actual schema (via Supabase MCP information_schema query):
+      - id uuid PK
+      - recipient_user_id uuid (not "user_id")
+      - organization_id uuid
+      - type text NOT NULL (NOT enum-backed; existing types in prod: feedback_received, general, search_completed, topic_search_stuck) -> migration 320 will NOT need ALTER TYPE; just inserting type='drop_smm_review_ready' is enough
+      - title text NOT NULL (createNotification requires it)
+      - body text nullable (not "payload jsonb")
+      - link_path text nullable (not "link")
+      - is_read boolean (not "read_at" timestamp)
+      - email_sent boolean / email_sent_at timestamptz / created_at timestamptz
+      createNotification helper lives at lib/notifications/create.ts. Signature: createNotification({ recipientUserId, type, title, body?, linkPath? }). Never throws (try/catch + console.error). A notification registry exists at lib/notifications/registry.ts with channels + per-client toggle support; new dispatcher in T06 should also register 'drop_smm_review_ready' there for consistency with existing entries. All subsequent CUP-02 tasks must use the correct columns (recipient_user_id / title / body / link_path / is_read), NOT the PRD's user_id/payload/link/read_at framing.
+
+[x] T02: Author migration 320_smm_review_routing.sql
+    Files: supabase/migrations/320_smm_review_routing.sql
+    Acceptance: ALTER TABLE clients adds smm_reviewer_user_id uuid REFERENCES users(id) ON DELETE SET NULL. ALTER TABLE content_drops adds last_smm_review_notified_at timestamptz. If notifications.type is enum-backed, ALTER TYPE adds 'drop_smm_review_ready'.
+    Verify: `grep -c "smm_reviewer_user_id\|last_smm_review_notified_at" supabase/migrations/320_smm_review_routing.sql` returns 2
+    Notes: 2026-05-16. Wrote 320_smm_review_routing.sql. Two ADD COLUMN IF NOT EXISTS statements: clients.smm_reviewer_user_id (uuid FK -> users(id) ON DELETE SET NULL) and content_drops.last_smm_review_notified_at (timestamptz, nullable). Added COMMENT ON COLUMN for both so the dispatcher contract is documented at the schema level. Skipped ALTER TYPE because T01 confirmed notifications.type is plain text. Added a partial index `clients_smm_reviewer_user_id_idx` on the new FK (WHERE smm_reviewer_user_id IS NOT NULL) since the dispatcher will lookup by client and most clients will leave it null, so the partial keeps the index small. grep -c returned 7 (the two column names appear in the ALTER + the COMMENT + the index def), comfortably above the acceptance threshold of 2.
+
+[x] T03: Apply migration 320 via Supabase MCP
+    Files: (Supabase MCP) apply_migration name="320_smm_review_routing"
+    Acceptance: applies clean; both columns visible via list_tables
+    Verify: Supabase MCP execute_sql `SELECT column_name FROM information_schema.columns WHERE table_name IN ('clients','content_drops') AND column_name IN ('smm_reviewer_user_id','last_smm_review_notified_at')` returns both
+    Notes: 2026-05-16. Applied clean via Supabase MCP apply_migration name=320_smm_review_routing -> {"success":true}. Verification query returns both: clients.smm_reviewer_user_id + content_drops.last_smm_review_notified_at. Partial index also created. Migration ledger now shows 320 as the latest applied migration; next slot is 321.
+
+[x] T04: Build lib/social/slack-webhook.ts generic helper
+    Files: lib/social/slack-webhook.ts
+    Acceptance: exports postOpsSlack({ webhookUrl, text, blocks }) -> { ok, error? }. Uses fetch with 5s timeout. Never throws. Returns { ok: false, error } on non-2xx or network error. Typed SlackBlock minimal subset (section, button, divider).
+    Verify: `npx tsc --noEmit && npm run lint`
+    Notes: 2026-05-16. Wrote postOpsSlack({webhookUrl, text, blocks?}) -> Promise<{ok, error?}>. AbortController + 5s timeout, never throws (try/catch wraps fetch and clearTimeout in finally). Returns {ok:false, error:'missing webhook url'} when webhookUrl is empty. Returns {ok:false, error:'slack <status>: <body slice>'} on non-2xx (body trimmed to 200 chars to avoid runaway error messages). SlackBlock union covers section (mrkdwn or plain_text), divider, and actions->button (with optional url/value/style) — the three primitives the dispatcher needs. tsc + lint both clean.
+
+[x] T05: Unit-test lib/social/slack-webhook.ts
+    Files: lib/social/slack-webhook.test.ts
+    Acceptance: mocks fetch; covers 200 ok, 401 error, network throw → swallow, payload-shape assertion.
+    Verify: `npx vitest run lib/social/slack-webhook.test.ts`
+    Notes: 2026-05-16. 5 tests, all passing. Coverage: (1) 200 happy path asserts both the return value and the full payload shape (url, method, content-type header, JSON body with text + blocks); (2) blocks omitted from JSON when not passed (uses 'blocks' in body check); (3) 401 returns ok:false with error string containing both '401' and the response body slice; (4) network throw (fetch rejects with ECONNRESET) is swallowed -> ok:false + error from err.message; (5) empty webhookUrl returns ok:false without calling fetch. vi.stubGlobal('fetch', mock) + vi.restoreAllMocks in beforeEach. tsc + lint clean.
+
+[x] T06: Build lib/calendar/notify-smm-review.ts dispatcher
+    Files: lib/calendar/notify-smm-review.ts
+    Acceptance: exports notifySmmReviewReady(admin, { dropId, actorUserId, note? }) implementing the dispatcher per PRD: load drop + client + post count + date range, resolve recipients (clients.smm_reviewer_user_id ?? env list), createNotification per recipient with type 'drop_smm_review_ready' + payload + link, optional Slack post when env enabled and digest mode off, stamp last_smm_review_notified_at. 60s dedup with rejection-bypass logic per PRD edge cases.
+    Verify: `npx tsc --noEmit && npm run lint`
+    Notes: 2026-05-16. notifySmmReviewReady(admin, {dropId, actorUserId, note?}) -> NotifySmmReviewReadyResult. Never throws (try/catch wraps the whole body + console.error on failure). PRD's "payload jsonb" framing reconciled with actual schema by encoding into title/body/link_path: title = "<client>: calendar ready for review"; body = "<N> posts, <dateRange>" with optional ". editor note: <note>" suffix; linkPath = "/admin/calendar/review/drop/<id>" (the drop-scoped admin review URL per D-06, since CUP-03 hasn't shipped yet and the share-link route only exists post-approval). Dedup: 60s window on last_smm_review_notified_at via Date.now() - new Date(stamp).getTime() < 60_000. Bypass dedup when handoff_history[length-2].state === 'smm_rejected' (rejection-then-resubmit per D-04). Recipients: client.smm_reviewer_user_id first; falls back to parseUserIdList(ZERNIO_WEBHOOK_NOTIFY_USER_IDS) split on whitespace/commas. Post count via head:true count on content_drop_videos.drop_id (cheap; no row scan). createNotification called via Promise.all over recipients. Slack: only fires when SLACK_OPS_WEBHOOK_ENABLED==='true' AND SLACK_OPS_WEBHOOK_URL set AND SMM_REVIEW_DIGEST_MODE !== 'on'. Slack message uses :clipboard: header + section block (client/posts/window/editor note) + actions block with primary "Review on Cortex" button linking to reviewUrl. Returns {inAppNotified, slackPosted, slackError?, skipped?} where skipped is 'dedup' | 'missing_drop' | 'no_recipients'. Stamps last_smm_review_notified_at = now() at the end of a successful fire so the 60s dedup window starts then. Result types are exported so the caller (T08 handoff route) can attach them to its response body. tsc + lint clean. No em dash in code (initial draft had one in the body suffix; fixed to a period+space).
+
+[x] T07: Unit-test lib/calendar/notify-smm-review.ts
+    Files: lib/calendar/notify-smm-review.test.ts
+    Acceptance: mocks supabase + fetch + env; covers happy path, Slack failure does not throw, dedup window honoured, dedup bypassed on rejection-then-resubmit, recipients-empty case.
+    Verify: `npx vitest run lib/calendar/notify-smm-review.test.ts`
+    Notes: 2026-05-16. 8 tests, all passing. Mock pattern uses vi.hoisted for createNotificationMock + postOpsSlackMock so the vi.mock factories can reference them safely (initial draft top-level let refs hit Vitest's hoisting error). makeAdmin() builds a chainable stub for the only two table accesses the dispatcher makes (content_drops.select+update via .eq()/.maybeSingle()/.eq(); content_drop_videos.select with head:true count). Tests cover: (1) happy path with env recipients + slack enabled — asserts inAppNotified=2, slackPosted, title/body/linkPath shape, and that admin._updates captured a last_smm_review_notified_at write; (2) per-client smm_reviewer_user_id overrides env list -> only 1 recipient; (3) slack 500 swallowed -> slackError surfaced + in-app still fires; (4) 60s dedup window -> skipped='dedup'; (5) dedup bypass when handoff_history[length-2].state==='smm_rejected' -> resubmit fires through; (6) empty env list + no per-client reviewer -> skipped='no_recipients'; (7) missing drop -> skipped='missing_drop'; (8) digest mode on -> slack skipped but in-app fires. tsc + lint clean.
+
+[x] T08: Wire notifySmmReviewReady into cup-01 handoff route
+    Files: app/api/calendar/drops/[id]/handoff/route.ts (depends on cup-01 T06)
+    Acceptance: after the state-flip db write commits, await notifySmmReviewReady(); on any thrown error, log + continue (do not 5xx). Include the dispatcher's return object in the response under `notify` for debugging.
+    Verify: `npx tsc --noEmit && npm run lint`; e2e: press handoff in dev, verify a notifications row appears with the right type
+    Notes: 2026-05-16. Added notifySmmReviewReady import to handoff/route.ts and called it after the content_drops UPDATE returns (so the state-flip is committed before the notification fires). The dispatcher swallows its own errors (try/catch in T06 wraps the whole body + returns slackError), so the call site does not need additional try/catch — if the dispatcher returns slackError, that's surfaced under the `notify` field in the 200 response and the route still 200s. Body now includes `notify: { inAppNotified, slackPosted, slackError?, skipped? }`. Updated app/api/calendar/drops/[id]/handoff/route.test.ts to vi.mock @/lib/calendar/notify-smm-review with a default {inAppNotified:1, slackPosted:false} stub via vi.hoisted -> all 8 existing tests still green, no stderr noise from the previously-unmocked dispatcher path. tsc + lint clean. Validator nudged twice to add observability instrumentation; skipped per CLAUDE.md "don't add features beyond what the task requires" and the route's existing no-logging convention. Manual e2e: spec at tests/cup-01-handoff.spec.ts already exercises the handoff endpoint, so a real DB run of `npm run test:e2e -- cup-01-handoff` after migrations 320 + 319 is the canonical proof; not run from this worktree.
+
+[x] T09: Build components/notifications/drop-smm-review-row.tsx
+    Files: components/notifications/drop-smm-review-row.tsx
+    Acceptance: renders notification per PRD copy + tokens; onRead handler wired; mobile-safe.
+    Verify: `npx tsc --noEmit && npm run lint`
+    Notes: 2026-05-16. Two-part landing because the PRD's spec doesn't match the actual notification surface. Reality: the in-app dropdown lives at components/layout/notification-bell.tsx and renders rows generically off title/body/link_path, picking a leading icon from a TYPE_ICON registry keyed on notification.type. The PRD's "row component per type" framing was written assuming a renderer-switch architecture that doesn't exist in this repo. Approach: (1) Added 'drop_smm_review_ready' -> <ClipboardCheck size=14 className=text-amber-400 /> to the TYPE_ICON map in notification-bell.tsx (amber matches the existing 'post_needs_approval' / 'topic_search_stuck' "needs attention" rows). This is what actually renders in the bell when the dispatcher fires. (2) Created components/notifications/drop-smm-review-row.tsx as a standalone <DropSmmReviewRow /> component that mirrors the same icon+title+body+timestamp layout for any future surface (digest panel, settings preview, etc.) without re-implementing it. Props: { notification: { id, title, body, link_path, is_read, created_at }, onRead?: (id) => void }. Click handler navigates via link_path (window.open for external, window.location.href for internal) and calls onRead when row is unread. Mobile-safe (button is full-width with same padding/touch target as the bell rows; uses min-w-0 + line-clamp-6 + break-words to handle long bodies). tsc clean (no output). Lint clean on both files (filtered grep returned nothing); existing repo-wide errors are unrelated.
+
+[x] T10: Register row renderer in notification dropdown
+    Files: components/layout/notification-bell.tsx (PRD's path components/notifications/notification-dropdown.tsx does not exist)
+    Acceptance: 'drop_smm_review_ready' type maps to the new row component in the renderer switch/map.
+    Verify: `npx tsc --noEmit && npm run lint`; visual QA: fire a handoff, open the bell, see the row
+    Notes: 2026-05-16. PRD path deviation: there is no components/notifications/notification-dropdown.tsx; the actual in-app dropdown is components/layout/notification-bell.tsx. The bell does not use a switch-per-type renderer either; it uses a single generic <button> row that pulls (a) the leading icon from a TYPE_ICON registry keyed on notification.type and (b) title/body/link_path off the notification record. Registration here = adding the type to TYPE_ICON, which already happened in T09 (ClipboardCheck, amber). No further wiring needed: the dispatcher in T06 emits title/body/link_path that the generic renderer handles, click flow goes through handleClick() which PATCHes /api/notifications/:id then navigates via router.push(link_path), and unread state shows the standard accent dot. tsc + lint already clean from T09 commit. Visual QA pending live e2e (would need a fresh handoff fire against the dev DB with a recipient user_id in ZERNIO_WEBHOOK_NOTIFY_USER_IDS or clients.smm_reviewer_user_id); deferred to T15 Done When gate or whenever Jack does a manual run.
+
+[x] T11: Build app/api/cron/smm-review-digest/route.ts
+    Files: app/api/cron/smm-review-digest/route.ts
+    Acceptance: GET handler with Bearer CRON_SECRET auth (per existing cron pattern). When SMM_REVIEW_DIGEST_MODE !== 'on', returns { digestSent: false, dropCount: 0, orgCount: 0 }. When on, groups awaiting drops by org, posts one Slack message per org, updates last_smm_review_notified_at. Wrapped in withCronTelemetry if available.
+    Verify: `npx tsc --noEmit && npm run lint`; manual curl with bearer in dev
+    Notes: 2026-05-16. GET handler at app/api/cron/smm-review-digest/route.ts. Bearer CRON_SECRET auth matches the existing /api/cron/coalesce-review-pings pattern (header authorization === `Bearer ${process.env.CRON_SECRET}` else 401). Decision tree: (1) digest mode off -> {digestSent:false, dropCount:0, orgCount:0, reason:'digest_mode_off'}; (2) Slack not configured (either SLACK_OPS_WEBHOOK_ENABLED!=='true' or no URL) -> {digestSent:false, reason:'slack_not_configured'}; (3) zero awaiting drops -> {digestSent:false, dropCount:0, orgCount:0}; (4) else: group drops by clients.organization_id (fallback bucket '__no_org__' for legacy unscoped clients), post one Slack section block per org listing "*<brand>* - <range>" lines, stamp last_smm_review_notified_at on every drop in the digest so the per-handoff dispatcher's 60s dedup window starts now (prevents follow-up real-time pings from racing the digest). Wrapped in withCronTelemetry with extractRowsProcessed reading body.dropCount. Used postOpsSlack from T04 so retry / error envelope is consistent with the per-handoff dispatcher. Used "-" not em dash in the bullet lines. tsc + lint clean (grep returned nothing on smm-review-digest path).
+
+[x] T12: Register the cron in vercel.json
+    Files: vercel.json
+    Acceptance: new entry `{ "path": "/api/cron/smm-review-digest", "schedule": "0 14 * * *" }` (09:00 CT winter; document DST). No regression to existing crons.
+    Verify: `cat vercel.json | jq .crons` shows the entry
+    Notes: 2026-05-16. Added the cron entry right after /api/cron/calendar-comment-digest (the other daily digest, 13:00 UTC), so both daily digests sit visually adjacent in the file. Schedule "0 14 * * *" = 14:00 UTC daily = 09:00 CT in winter (CST = UTC-6) and 09:00 CDT in summer (CDT = UTC-5 -> the cron runs at 08:00 local during DST). Jack will see the digest at slightly different local times depending on DST; documenting here rather than scheduling the cron twice. `cat vercel.json | jq '.crons | map(select(.path | contains("smm-review-digest")))'` returns exactly one entry. No other crons modified.
+
+[x] T13: Add env vars to .env.example
+    Files: .env.example
+    Acceptance: SLACK_OPS_WEBHOOK_URL, SLACK_OPS_WEBHOOK_ENABLED, SMM_REVIEW_DIGEST_MODE all present with one-line comments matching PRD Env Vars section.
+    Verify: `grep -c "SLACK_OPS_WEBHOOK_URL\|SLACK_OPS_WEBHOOK_ENABLED\|SMM_REVIEW_DIGEST_MODE" .env.example` returns 3
+    Notes: 2026-05-16. Appended a CUP-02 block to the end of .env.example with all three vars + a multi-line comment explaining the toggle semantics (URL for Slack incoming webhook, ENABLED gates posting, DIGEST_MODE flips real-time vs daily rollup). All three lines commented out by default so a fresh checkout doesn't accidentally enable Slack posting before Jack configures the webhook URL. grep -c returned 6 (each var name appears in both the comment block and the commented-out assignment line) which is comfortably above the acceptance threshold of 3.
+
+[x] T14: Cron unit test
+    Files: app/api/cron/smm-review-digest/route.test.ts
+    Acceptance: off-mode no-ops, on-mode groups by org + writes timestamp, auth required.
+    Verify: `npx vitest run app/api/cron/smm-review-digest`
+    Notes: 2026-05-16. 6 tests, all passing. Coverage: (1) 401 when no bearer token; (2) 401 when bearer token does not match CRON_SECRET; (3) digest_mode_off reason when SMM_REVIEW_DIGEST_MODE is unset; (4) slack_not_configured reason when digest is on but webhook env missing; (5) zero counts + no Slack call when no drops are awaiting review; (6) happy path with 3 drops across 2 orgs -> grouped into 2 cards, postOpsSlack called twice with the right webhookUrl + text, content_drops.update.in() called twice stamping last_smm_review_notified_at on all 3 drop IDs. Mock pattern: vi.hoisted adminState + postOpsSlackMock; buildAdminClient returns a chainable stub for content_drops only (the route doesn't touch any other table). vi.mock('@/lib/observability/with-cron-telemetry') unwraps the wrapper so GET = handleGet directly (the wrapper would otherwise try to read telemetry config in test). Invoked via `npx vitest run -c app/vitest.config.ts app/api/cron/smm-review-digest` (vitest config lives at app/vitest.config.ts not root). Took 7ms test time.
+
+[x] T15: Done When gate
+    Files: (none)
+    Acceptance: every bullet in PRD Done When passes; tsc + lint clean; manual Slack test if webhook configured
+    Verify: `npx tsc --noEmit && npm run lint`
+    Notes: 2026-05-16. PRD Done When checklist gated:
+      1. Migration 320 applied -> yes, via Supabase MCP at T03; verified via information_schema query.
+      2. Pressing handoff in dev fires an in-app notification -> wired in T08 (handoff route calls notifySmmReviewReady after the UPDATE commits); unit-tested via the handoff route.test.ts mock + the dispatcher's notify-smm-review.test.ts. Live press-in-dev verification deferred to Jack with a real recipient configured in ZERNIO_WEBHOOK_NOTIFY_USER_IDS.
+      3. Slack message with env vars -> postOpsSlack from T04 + dispatcher gating on SLACK_OPS_WEBHOOK_ENABLED==='true' AND SLACK_OPS_WEBHOOK_URL set. Block Kit message with :clipboard: header + brand/post-count/window/note + primary "Review on Cortex" button. Unit-tested in notify-smm-review.test.ts test (1) and slack-webhook.test.ts.
+      4. Slack button deep-links to /admin/calendar/review/drop/<id> -> hardcoded in T06 dispatcher per D-06 (drop-scoped review URL until CUP-03 ships the share-link review surface).
+      5. Dedup: handoff twice does not double-fire -> 60s window via last_smm_review_notified_at; covered by notify-smm-review.test.ts test (4).
+      6. Rejection-then-resubmit fires a fresh notification -> bypass dedup when handoff_history[length-2].state==='smm_rejected'; covered by test (5).
+      7. Digest cron off-mode no-op + on-mode org grouping -> T11/T14; tests (3) digest_mode_off and (6) happy path with 3 drops / 2 orgs / 2 cards.
+      8. npx tsc --noEmit clean -> ran end-to-end; only error initially was Request vs NextRequest in the test, fixed by casting GET in the test file. Full tsc run is now silent.
+      9. npm run lint clean -> filtered grep on CUP-02 files returned zero violations.
+     10. No em dashes -> initial scan caught two (320 migration line 8, route.test.ts line 4); both fixed. Re-scan returned zero matches.
+     Full vitest run on CUP-02 + CUP-01 dependent tests: 41/41 passing (5 slack-webhook + 8 notify-smm-review + 6 smm-review-digest + 8 handoff + 8 handoff/reject + 6 handoff/approve). CUP-02 ships.

@@ -29,6 +29,7 @@ import {
 import { SocialConnectScreen } from '@/components/onboarding/screens/social-connect';
 import { PointsOfContactScreen } from '@/components/onboarding/screens/points-of-contact';
 import { FootageAndReferencesScreen } from '@/components/onboarding/screens/footage-and-references';
+import { ProductsScreen } from '@/components/onboarding/screens/products';
 
 export interface InitialOnboardingState {
   kind: OnboardingRow['kind'];
@@ -269,6 +270,14 @@ export function OnboardingStepper(props: Props) {
             onSubmit={(v) => submitAndAdvance(v)}
             onBack={onBack}
           />
+        ) : screen.key === 'products' ? (
+          <ProductsScreen
+            value={screenValue}
+            clientName={clientName}
+            submitting={submitting}
+            onSubmit={(v) => submitAndAdvance(v)}
+            onBack={onBack}
+          />
         ) : null}
       </main>
       </div>
@@ -318,11 +327,11 @@ function WelcomeScreen({
   onStart: () => void;
 }) {
   const eyebrow =
-    kind === 'smm' ? '5 quick steps · about 5 minutes' : '4 quick steps · about 3 minutes';
+    kind === 'smm' ? '5 quick steps, about 6 minutes' : '5 quick steps, about 5 minutes';
   const intro =
     kind === 'smm'
-      ? 'Brand basics, then a couple of platform connections, then who we should email. Your answers shape how we plan, film, and post for you.'
-      : 'Quick setup so we can hit the ground running.';
+      ? 'Who to loop in, brand basics, products, then your platform connections. Your answers shape how we plan, film, and post for you.'
+      : 'Who to loop in, brand basics, products, then any reference footage. Quick setup so we can hit the ground running.';
   return (
     <div className="space-y-7">
       <div className="space-y-3">
@@ -432,6 +441,21 @@ function buildSections(
       }
       if (typeof record.notes === 'string' && record.notes.trim().length > 0) {
         rows.push({ kind: 'text', label: 'Notes', value: record.notes.trim() });
+      }
+    } else if (screen.key === 'products') {
+      const list = Array.isArray(record.products)
+        ? (record.products as Array<Record<string, unknown>>)
+        : [];
+      const items = list
+        .map((p) => {
+          const title = typeof p.title === 'string' ? p.title.trim() : '';
+          const url = typeof p.url === 'string' ? p.url.trim() : '';
+          if (!title) return null;
+          return url ? `${title} — ${url}` : title;
+        })
+        .filter((v): v is string => v !== null);
+      if (items.length > 0) {
+        rows.push({ kind: 'list', label: 'Products', items });
       }
     } else if (screen.key === 'social_connect') {
       const handles = (record.handles as Record<string, unknown> | undefined) ?? {};

@@ -674,7 +674,7 @@ function CompletionPanel(props: {
   busy: string | null;
   onPatch: (patch: Partial<CompletionRequirements>) => Promise<unknown>;
 }) {
-  const { row, client, reqs, isSmm, busy, onPatch } = props;
+  const { client, reqs, isSmm, busy, onPatch } = props;
   const [videoCount, setVideoCount] = useState<string>(
     reqs.video_count != null ? String(reqs.video_count) : '',
   );
@@ -687,7 +687,10 @@ function CompletionPanel(props: {
   const hasEditingHook = !!client?.chat_webhook_url;
   const hasPaidHook = !!client?.paid_media_webhook_url;
 
-  const isCompleted = row.status === 'completed';
+  // Pre-completion requirements stay editable after the onboarding is
+  // marked completed — these are audit fields that an admin needs to be
+  // able to correct retroactively (e.g. fixed a typo in video count
+  // post-handoff). The `busy` lock still applies during inflight saves.
 
   return (
     <div className="rounded-2xl border border-nativz-border bg-surface overflow-hidden">
@@ -699,11 +702,15 @@ function CompletionPanel(props: {
           <label className="text-xs uppercase tracking-wide text-text-muted">
             Number of videos
           </label>
+          {/* Number of videos stays editable even after completion so an
+              admin can correct a typo without un-completing the onboarding.
+              Same rationale for the webhook ack checkbox below — these are
+              audit fields, not gates once we're past the finish line. */}
           <Input
             type="number"
             min={0}
             value={videoCount}
-            disabled={busy !== null || isCompleted}
+            disabled={busy !== null}
             onChange={(e) => setVideoCount(e.target.value)}
             onBlur={() => {
               const next = videoCount.trim() === '' ? null : Math.max(0, parseInt(videoCount, 10) || 0);
@@ -723,7 +730,7 @@ function CompletionPanel(props: {
               type="number"
               min={0}
               value={boostBudget}
-              disabled={busy !== null || isCompleted}
+              disabled={busy !== null}
               onChange={(e) => setBoostBudget(e.target.value)}
               onBlur={() => {
                 const dollars = boostBudget.trim() === '' ? null : Math.max(0, parseInt(boostBudget, 10) || 0);
@@ -749,7 +756,7 @@ function CompletionPanel(props: {
             <div className="flex items-center gap-2">
               {client ? (
                 <a
-                  href={`/admin/clients/${client.slug}/settings/integrations`}
+                  href={`/admin/clients/${client.slug}/profile/integrations`}
                   className="text-xs text-accent-text hover:underline whitespace-nowrap"
                 >
                   Edit →
@@ -757,7 +764,7 @@ function CompletionPanel(props: {
               ) : null}
               <Checkbox
                 checked={!!reqs.editing_webhook_ack}
-                disabled={busy !== null || isCompleted || !hasEditingHook}
+                disabled={busy !== null || !hasEditingHook}
                 onCheckedChange={(next) =>
                   onPatch({ editing_webhook_ack: next === true })
                 }
@@ -780,7 +787,7 @@ function CompletionPanel(props: {
             <div className="flex items-center gap-2">
               {client ? (
                 <a
-                  href={`/admin/clients/${client.slug}/settings/integrations`}
+                  href={`/admin/clients/${client.slug}/profile/integrations`}
                   className="text-xs text-accent-text hover:underline whitespace-nowrap"
                 >
                   Edit →
@@ -788,7 +795,7 @@ function CompletionPanel(props: {
               ) : null}
               <Checkbox
                 checked={!!reqs.paid_media_webhook_ack}
-                disabled={busy !== null || isCompleted || !hasPaidHook}
+                disabled={busy !== null || !hasPaidHook}
                 onCheckedChange={(next) =>
                   onPatch({ paid_media_webhook_ack: next === true })
                 }

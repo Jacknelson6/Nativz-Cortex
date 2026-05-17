@@ -69,13 +69,22 @@ export async function convertProspect(input: ConvertProspectInput): Promise<Conv
 
   const { data: prospect, error: prospectErr } = await admin
     .from('prospects')
-    .select('id, brand_name, website_url, niche, converted_to_client_id, archived_at, owner_user_id')
+    .select('id, brand_name, website_url, niche, converted_to_client_id, archived_at, owner_user_id, agency')
     .eq('id', prospectId)
     .maybeSingle();
   if (prospectErr) throw new ConvertProspectError(prospectErr.message, 500);
   if (!prospect) throw new ConvertProspectError('Prospect not found', 404);
   if (prospect.converted_to_client_id) {
     throw new ConvertProspectError('Prospect already converted', 409);
+  }
+  // Agency tag is required on every prospect after the Victory incident
+  // hardening. If we ever encounter a legacy prospect without one, fail
+  // fast rather than silently propagate a wrong-brand client downstream.
+  if (!prospect.agency) {
+    throw new ConvertProspectError(
+      'Prospect has no agency tag. Set Nativz or Anderson Collaborative on the prospect record before converting.',
+      422,
+    );
   }
 
   // Validate tier (package_tiers is the canonical tier table; PRD's
@@ -123,7 +132,10 @@ export async function convertProspect(input: ConvertProspectInput): Promise<Conv
       industry: prospect.niche ?? 'general',
       website_url: prospect.website_url ?? null,
       organization_id: organizationId,
-      agency: tier.agency,
+      // Source of truth is the prospect tag set at creation. Tier.agency
+      // is informational; if they ever diverge the prospect wins so the
+      // sales-team intent is preserved through conversion.
+      agency: prospect.agency,
       lifecycle_state: 'active',
       converted_from_prospect_id: prospect.id,
       default_strategist_id: body.strategist_user_id,

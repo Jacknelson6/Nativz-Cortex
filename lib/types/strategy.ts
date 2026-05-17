@@ -101,9 +101,13 @@ export interface OnboardFormData {
   name: string;
   website_url: string;
   /** Sales-pipeline stage chosen at the very first step. 'lead' = prospect
-   *  (default for cold inbound), 'active' = existing brand we're already
-   *  servicing. Persisted to `clients.lifecycle_state` on insert. */
-  lifecycle_state?: 'lead' | 'active';
+   *  (routes the wizard to /admin/prospects/new instead of creating a client),
+   *  'onboarding' = signed but not active yet (creates client + onboarding
+   *  row, routes to /admin/onboarding/[id]), 'active' = existing brand we're
+   *  already servicing (creates client, routes to /admin/clients/[slug]).
+   *  'lead' and 'active' persist to `clients.lifecycle_state`; 'onboarding'
+   *  persists as 'active' on clients (the onboarding row carries the state). */
+  lifecycle_state?: 'lead' | 'active' | 'onboarding';
   industry: string;
   target_audience: string;
   brand_voice: string;

@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Image from 'next/image';
 import { ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
@@ -31,6 +31,57 @@ function LoginFormInner() {
   const isAC = mode === 'anderson';
   const isDeactivated = searchParams.get('error') === 'deactivated';
   const requestedNext = searchParams.get('next');
+
+  // Magic-link tokens land here in the URL hash. Consume them on mount so
+  // people clicking an email link don't get stuck staring at the login form.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const hash = window.location.hash.slice(1);
+    if (!hash) return;
+    const params = new URLSearchParams(hash);
+    const access_token = params.get('access_token');
+    const refresh_token = params.get('refresh_token');
+    if (!access_token || !refresh_token) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const supabase = createClient();
+        const { data: sessionData, error: sessionErr } = await supabase.auth.setSession({
+          access_token,
+          refresh_token,
+        });
+        if (cancelled) return;
+        if (sessionErr || !sessionData.session) {
+          setError('That magic link is invalid or expired. Sign in with your password.');
+          window.history.replaceState(null, '', window.location.pathname + window.location.search);
+          return;
+        }
+        const userId = sessionData.session.user.id;
+        const { data: userData } = await supabase
+          .from('users').select('role').eq('id', userId).single();
+        const role = userData?.role ?? null;
+        const isAdmin = role === 'admin' || role === 'super_admin';
+        const safeNext = requestedNext && requestedNext.startsWith('/') ? requestedNext : null;
+        const target = isAdmin
+          ? safeNext ?? ADMIN_HOME
+          : safeNext && !safeNext.startsWith('/admin')
+            ? safeNext
+            : VIEWER_HOME;
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        router.replace(target);
+        router.refresh();
+      } catch (err) {
+        if (cancelled) return;
+        console.error('Magic-link consume failed:', err);
+        setError(err instanceof Error ? err.message : 'Sign-in failed. Try again.');
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [requestedNext, router]);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();

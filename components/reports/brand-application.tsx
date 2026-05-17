@@ -1,7 +1,5 @@
 'use client';
 
-import { Target } from 'lucide-react';
-
 import { Markdown } from '@/components/ai/markdown';
 
 interface BrandApplicationProps {
@@ -24,22 +22,14 @@ export function BrandApplication({ content, clientName }: BrandApplicationProps)
   const body = trimmed.length > 0 ? trimmed : fallback;
 
   return (
-    <div className="flex h-full min-h-[4rem] items-start gap-3 sm:gap-4 lg:border-l lg:border-nativz-border/50 lg:pl-8">
-      {/* Icon tile — same cyan treatment as ExecutiveSummary on purpose.
-          Per Jack's 2026-04-22 feedback ("don't use coral really anywhere"),
-          the executive-summary | brand-application pair are differentiated
-          by ICON (Sparkles vs Target) + label, NOT by accent color. Both
-          read as cyan brand chrome side by side. */}
-      <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-surface ring-1 ring-accent/20">
-        <Target size={16} className="text-accent-text" />
-      </div>
-      <div className="min-w-0 flex-1">
-        <h3 className="mb-3 font-mono text-[11px] uppercase tracking-[0.2em] text-accent-text/90">
+    <div className="h-full min-w-0 lg:border-l lg:border-nativz-border/50 lg:pl-8">
+      <div className="mb-4 border-b border-nativz-border/60 pb-4">
+        <h4 className="text-lg font-semibold tracking-tight text-text-primary">
           Brand application
-        </h3>
-        <div className="leading-relaxed text-text-primary [&_p]:text-text-primary [&_p]:m-0 [&_p]:!text-[17px] [&_p]:!leading-[1.7] [&_li]:!text-[17px] [&_li]:!leading-[1.7] [&_strong]:font-semibold">
-          <Markdown content={body} bodySize="md" />
-        </div>
+        </h4>
+      </div>
+      <div className="leading-relaxed text-text-primary [&_p]:text-text-primary [&_p]:m-0 [&_p]:!text-[17px] [&_p]:!leading-[1.7] [&_li]:!text-[17px] [&_li]:!leading-[1.7] [&_strong]:font-semibold">
+        <Markdown content={body} bodySize="md" />
       </div>
     </div>
   );
