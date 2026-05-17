@@ -114,7 +114,7 @@ export default async function ProfileOverviewPage({
 
       <WorkspaceSection
         title="Points of contact"
-        description="Who on the client side we talk to. Manage the roster from Users."
+        description="Who on the client side we talk to. Manage the full roster + Cortex access from Users."
       >
         {contacts.length === 0 ? (
           <div className="px-5 py-6 text-sm italic text-text-muted">
