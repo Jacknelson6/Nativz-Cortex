@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { Plug, Instagram, Music2, Youtube, Facebook, Globe } from 'lucide-react';
+import { Plug, Instagram, Music2, Youtube, Facebook, Globe, Linkedin, Twitter } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { SettingsPageHeader } from '@/components/clients/settings/settings-primitives';
@@ -35,7 +35,28 @@ const PLATFORM_META: Record<string, { label: string; icon: LucideIcon }> = {
   tiktok: { label: 'TikTok', icon: Music2 },
   youtube: { label: 'YouTube', icon: Youtube },
   facebook: { label: 'Facebook', icon: Facebook },
+  linkedin: { label: 'LinkedIn', icon: Linkedin },
+  x: { label: 'X', icon: Twitter },
 };
+
+function connectedHint(account: SocialAccount | undefined): string | undefined {
+  if (!account) return 'Not connected';
+  const parts: string[] = [];
+  if (account.connected_via) parts.push(`via ${account.connected_via}`);
+  if (account.connected_at) {
+    const ts = new Date(account.connected_at).getTime();
+    if (!Number.isNaN(ts)) {
+      const diff = Date.now() - ts;
+      const day = 24 * 60 * 60 * 1000;
+      if (diff < 60 * 1000) parts.push('just now');
+      else if (diff < 60 * 60 * 1000) parts.push(`${Math.floor(diff / (60 * 1000))}m ago`);
+      else if (diff < day) parts.push(`${Math.floor(diff / (60 * 60 * 1000))}h ago`);
+      else if (diff < 7 * day) parts.push(`${Math.floor(diff / day)}d ago`);
+      else parts.push(new Date(account.connected_at).toLocaleDateString());
+    }
+  }
+  return parts.join(' · ') || undefined;
+}
 
 function maskKey(value: string | null): string | null {
   if (!value) return null;
@@ -60,18 +81,11 @@ export default async function ProfileIntegrationsPage({
     .single<ClientRow>();
   if (!client) notFound();
 
-  // Migration 322 introduces client_social_accounts. Treat as empty if the
-  // table isn't there yet (PG error code 42P01 = undefined_table).
-  let socialAccounts: SocialAccount[] = [];
-  try {
-    const { data, error } = await admin
-      .from('client_social_accounts')
-      .select('platform, handle, connection_status, connected_via, connected_at')
-      .eq('client_id', client.id);
-    if (!error) socialAccounts = data ?? [];
-  } catch {
-    socialAccounts = [];
-  }
+  const { data: socialRows } = await admin
+    .from('client_social_accounts')
+    .select('platform, handle, connection_status, connected_via, connected_at')
+    .eq('client_id', client.id);
+  const socialAccounts: SocialAccount[] = socialRows ?? [];
 
   const accountsByPlatform = new Map<string, SocialAccount>(
     socialAccounts.map((a) => [a.platform, a]),
@@ -99,13 +113,7 @@ export default async function ProfileIntegrationsPage({
             <WorkspaceRow
               key={key}
               label={meta.label}
-              hint={
-                account?.connected_via
-                  ? `via ${account.connected_via}`
-                  : isConnected
-                  ? undefined
-                  : 'Not connected'
-              }
+              hint={connectedHint(account)}
               value={
                 account?.handle ? (
                   <span className="flex items-center gap-2">
