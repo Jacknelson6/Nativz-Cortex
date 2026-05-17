@@ -6,13 +6,9 @@ import { toast } from 'sonner';
 import { Pencil, X, Loader2 } from 'lucide-react';
 
 /**
- * SectionEditor — the click target that lives in the WorkspaceSection header
- * and opens an inline editor drawer for the section's fields.
- *
- * Each editor is rendered as a child render-prop that receives the current
- * draft state + a setter. On Save, the editor POSTs the patch JSON to the
- * supplied endpoint and refreshes the route so server-rendered values pick
- * up the change without a full reload.
+ * SectionEditor:legacy drawer-based editor. New code should reach for
+ * InlineSection below; this stays around for one-off "click to expand"
+ * cases inside lists.
  */
 export function SectionEditor<T extends Record<string, unknown>>({
   label = 'Edit',
@@ -31,9 +27,7 @@ export function SectionEditor<T extends Record<string, unknown>>({
   initial: T;
   endpoint: string;
   method?: 'PATCH' | 'POST' | 'PUT';
-  /** Map the draft state to the actual request body. Defaults to identity. */
   buildBody?: (draft: T) => Record<string, unknown>;
-  /** Throw / return a string to block the save with a toast error. */
   validate?: (draft: T) => string | null;
   children: (draft: T, set: (patch: Partial<T>) => void) => ReactNode;
 }) {
@@ -152,9 +146,9 @@ export function SectionEditor<T extends Record<string, unknown>>({
 }
 
 /**
- * Labelled field used inside SectionEditor / InlineSection. On wide screens
- * the label + hint sit in a narrow left column and the control fills the
- * right; on narrow screens it collapses to a vertical stack.
+ * Labelled field used inside SectionEditor / InlineSection. Stacked label-
+ * above-input layout:matches Dovetail's settings forms where the label
+ * doubles as the field heading.
  */
 export function EditorField({
   label,
@@ -166,30 +160,29 @@ export function EditorField({
   children: ReactNode;
 }) {
   return (
-    <label className="grid gap-2 sm:grid-cols-[180px_minmax(0,1fr)] sm:gap-x-6 sm:gap-y-1">
-      <div className="sm:pt-2">
-        <div className="text-[12px] font-medium text-text-primary leading-snug">{label}</div>
-        {hint && (
-          <div className="text-[11.5px] text-text-muted leading-relaxed mt-1">{hint}</div>
-        )}
-      </div>
-      <div className="min-w-0">{children}</div>
+    <label className="block space-y-1.5">
+      <div className="text-[13px] font-medium text-text-primary leading-snug">{label}</div>
+      {hint && (
+        <div className="text-[12px] text-text-muted leading-relaxed">{hint}</div>
+      )}
+      <div className="min-w-0 pt-0.5">{children}</div>
     </label>
   );
 }
 
+/**
+ * Input chrome borrowed from Dovetail: subtle 1px border on a slightly
+ * raised surface, generous corner radius, accent ring on focus.
+ */
 export const editorInputClass =
-  'w-full rounded-lg border border-nativz-border bg-background px-3.5 py-2.5 text-sm text-text-primary placeholder:text-text-muted/70 transition-colors hover:border-nativz-border/80 focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/15';
-export const editorTextareaClass = `${editorInputClass} min-h-[96px] resize-y leading-relaxed`;
+  'w-full rounded-lg border border-nativz-border/80 bg-background/60 px-3 py-2 text-[13px] text-text-primary placeholder:text-text-muted/60 transition-colors hover:border-nativz-border focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20';
+export const editorTextareaClass = `${editorInputClass} min-h-[88px] resize-y leading-relaxed`;
 
 /**
- * InlineSection — Dovetail-style settings section. Title + description live
- * outside the card, the form lives inside, and a per-section Save button
- * activates as soon as the draft differs from `initial`. No drawers, no
- * separate edit pages — what you see is what you save.
- *
- * Pairs with `EditorField` + `editorInputClass`/`editorTextareaClass` so
- * inputs look identical to the legacy drawer-based SectionEditor.
+ * InlineSection:Dovetail-style settings card. Title + description live
+ * INSIDE the card (top, with a hairline divider below). The save footer
+ * only appears when the draft diverges from the saved baseline, keeping
+ * the chrome quiet while still giving an obvious place to confirm.
  */
 export function InlineSection<T extends Record<string, unknown>>({
   title,
@@ -202,6 +195,7 @@ export function InlineSection<T extends Record<string, unknown>>({
   saveLabel = 'Save changes',
   successMessage = 'Saved',
   anchor,
+  headerAction,
   children,
 }: {
   title: string;
@@ -215,6 +209,8 @@ export function InlineSection<T extends Record<string, unknown>>({
   successMessage?: string;
   /** Anchor id so deep links from overview can scroll the section into view. */
   anchor?: string;
+  /** Optional right-side header slot, e.g. a status pill or external link. */
+  headerAction?: ReactNode;
   children: (draft: T, set: (patch: Partial<T>) => void) => ReactNode;
 }) {
   const router = useRouter();
@@ -266,56 +262,128 @@ export function InlineSection<T extends Record<string, unknown>>({
   }
 
   return (
-    <section className="scroll-mt-24" id={anchor}>
-      <header className="mb-4">
-        <h2 className="ui-section-title">{title}</h2>
-        {description && (
-          <p className="mt-1.5 text-[13px] text-text-muted leading-relaxed max-w-[60ch]">
-            {description}
-          </p>
-        )}
-      </header>
-      <div className="rounded-2xl border border-nativz-border bg-surface overflow-hidden">
-        <div className="px-5 py-5 sm:px-6 sm:py-6 space-y-5">
-          {children(draft, setPartial)}
+    <SectionCard
+      title={title}
+      description={description}
+      anchor={anchor}
+      headerAction={headerAction}
+      footer={
+        dirty ? (
+          <SectionFooter
+            saving={saving}
+            onReset={handleReset}
+            onSave={handleSave}
+            saveLabel={saveLabel}
+          />
+        ) : null
+      }
+    >
+      <div className="space-y-5">{children(draft, setPartial)}</div>
+    </SectionCard>
+  );
+}
+
+/**
+ * Shared card chrome:title + optional description in a header, divider,
+ * then content, then optional footer. Used by InlineSection plus any
+ * editor that needs custom save/disconnect logic (UpPromote, social rows)
+ * but wants the same visual frame.
+ */
+export function SectionCard({
+  title,
+  description,
+  anchor,
+  headerAction,
+  footer,
+  bodyClassName,
+  children,
+}: {
+  title: ReactNode;
+  description?: ReactNode;
+  anchor?: string;
+  headerAction?: ReactNode;
+  footer?: ReactNode;
+  bodyClassName?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section
+      id={anchor}
+      className="scroll-mt-24 rounded-2xl border border-nativz-border bg-surface overflow-hidden"
+    >
+      <header className="flex items-start justify-between gap-4 px-5 sm:px-6 pt-5 sm:pt-6 pb-4">
+        <div className="min-w-0">
+          <h2 className="text-[15px] font-semibold text-text-primary leading-tight">
+            {title}
+          </h2>
+          {description && (
+            <p className="mt-1 text-[12.5px] text-text-muted leading-relaxed max-w-[58ch]">
+              {description}
+            </p>
+          )}
         </div>
-        <footer
-          className={`flex items-center justify-between gap-3 border-t border-nativz-border/70 px-5 sm:px-6 py-3 transition-colors ${
-            dirty ? 'bg-accent-surface/30' : 'bg-surface-hover/20'
-          }`}
-        >
-          <div className="text-[11.5px] text-text-muted min-w-0">
-            {dirty ? (
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-accent" />
-                <span>Unsaved changes</span>
-              </span>
-            ) : (
-              <span className="opacity-60">All changes saved</span>
-            )}
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={handleReset}
-              disabled={!dirty || saving}
-              className="rounded-full px-3 py-1.5 text-xs text-text-muted hover:text-text-primary hover:bg-surface-hover disabled:opacity-0 disabled:pointer-events-none transition-opacity"
-            >
-              Discard
-            </button>
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={!dirty || saving}
-              className="inline-flex items-center gap-1.5 rounded-full bg-accent px-4 py-1.5 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              {saving && <Loader2 size={12} className="animate-spin" />}
-              {saveLabel}
-            </button>
-          </div>
-        </footer>
-      </div>
+        {headerAction && <div className="shrink-0">{headerAction}</div>}
+      </header>
+      <div className="border-t border-nativz-border/70" />
+      <div className={bodyClassName ?? 'px-5 sm:px-6 py-5'}>{children}</div>
+      {footer}
     </section>
+  );
+}
+
+/**
+ * Save / discard footer used by InlineSection and the bespoke editors.
+ * Surfaces as a thin sticky-style bar at the bottom of the card.
+ */
+export function SectionFooter({
+  saving,
+  onReset,
+  onSave,
+  saveLabel = 'Save changes',
+  leftSlot,
+  disabled,
+}: {
+  saving: boolean;
+  onReset?: () => void;
+  onSave: () => void;
+  saveLabel?: string;
+  /** Optional content rendered on the left, e.g. a Disconnect button. */
+  leftSlot?: ReactNode;
+  /** Disable the save button even though the section is technically dirty. */
+  disabled?: boolean;
+}) {
+  return (
+    <footer className="flex items-center justify-between gap-3 border-t border-nativz-border/70 bg-background/40 px-5 sm:px-6 py-3">
+      <div className="flex items-center gap-3 min-w-0 text-[12px] text-text-muted">
+        {leftSlot ?? (
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+            <span>Unsaved changes</span>
+          </span>
+        )}
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        {onReset && (
+          <button
+            type="button"
+            onClick={onReset}
+            disabled={saving}
+            className="rounded-full px-3 py-1.5 text-[12px] text-text-muted hover:text-text-primary hover:bg-surface-hover disabled:opacity-50 transition-colors"
+          >
+            Discard
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={saving || disabled}
+          className="inline-flex items-center gap-1.5 rounded-full bg-accent px-4 py-1.5 text-[12px] font-medium text-white hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        >
+          {saving && <Loader2 size={12} className="animate-spin" />}
+          {saveLabel}
+        </button>
+      </div>
+    </footer>
   );
 }
 

@@ -129,7 +129,7 @@ function ContactFormFields({
           placeholder="+1 555 123 4567"
         />
       </EditorField>
-      <EditorField label="Title" hint="Their job title — e.g. CMO, Founder, Brand Lead.">
+      <EditorField label="Title" hint="Their job title, e.g. CMO, Founder, Brand Lead.">
         <input
           type="text"
           value={draft.role}
@@ -139,7 +139,7 @@ function ContactFormFields({
       </EditorField>
       <EditorField
         label="Project role"
-        hint="What they own on our side — Approvals, Strategy POC, Billing, etc."
+        hint="What they own on our side: Approvals, Strategy POC, Billing, etc."
       >
         <input
           type="text"
@@ -206,7 +206,7 @@ export function InviteButton({ clientId }: { clientId: string }) {
 
 /**
  * Tiny inline row action menu. Confirms + deletes on click. We keep it
- * deliberately barebones — copy invite URL, revoke, remove access, delete
+ * deliberately barebones: copy invite URL, revoke, remove access, delete
  * contact all collapse into a single "•••" trigger so the row stays clean.
  */
 export function RowActions({

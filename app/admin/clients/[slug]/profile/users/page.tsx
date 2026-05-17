@@ -4,9 +4,10 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getBrandFromAgency } from '@/lib/agency/detect';
 import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 import { SettingsPageHeader } from '@/components/clients/settings/settings-primitives';
-import { ClientContactsCard } from '@/components/clients/client-contacts-card';
+import { ProfileUsersTable } from '@/components/clients/profile/profile-users-table';
 
 export const dynamic = 'force-dynamic';
+// v2: dovetail-style table
 
 type Contact = {
   id: string;
@@ -112,28 +113,16 @@ export default async function ProfileUsersPage({
         eyebrow="Brand profile"
         icon={UsersIcon}
         title="Users"
-        subtitle="Everyone we talk to about this brand. Each row shows whether they have Cortex access — invite them from the row when they need it."
+        subtitle="Everyone we talk to about this brand. Send, resend, or revoke portal invites inline."
       />
 
-      <section className="scroll-mt-24">
-        <header className="mb-4">
-          <h2 className="ui-section-title">Contacts &amp; portal access</h2>
-          <p className="mt-1.5 text-[13px] text-text-muted leading-relaxed max-w-[60ch]">
-            One unified roster. People with Cortex access show a green badge;
-            pending invites show amber. Send, resend, or revoke invites inline.
-          </p>
-        </header>
-        <div className="rounded-2xl border border-nativz-border bg-surface px-5 py-5 sm:px-6 sm:py-6">
-          <ClientContactsCard
-            clientId={client.id}
-            clientName={client.name}
-            initialContacts={contacts}
-            initialInvites={invites}
-            portalContacts={portalContacts}
-            bare
-          />
-        </div>
-      </section>
+      <ProfileUsersTable
+        clientId={client.id}
+        clientName={client.name}
+        initialContacts={contacts}
+        initialInvites={invites}
+        initialPortalUsers={portalContacts}
+      />
     </>
   );
 }

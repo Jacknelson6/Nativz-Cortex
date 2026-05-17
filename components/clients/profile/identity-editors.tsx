@@ -208,7 +208,7 @@ export function CaptionsEditor({
               placeholder="Add a hashtag"
             />
           </EditorField>
-          <EditorField label="Caption notes" hint="Tone / structure guidance — used as prompt context, not appended.">
+          <EditorField label="Caption notes" hint="Tone / structure guidance, used as prompt context, not appended.">
             <textarea
               value={d.caption_notes}
               onChange={(e) => set({ caption_notes: e.target.value })}

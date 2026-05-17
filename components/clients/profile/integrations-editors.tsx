@@ -16,6 +16,8 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import {
   InlineSection,
+  SectionCard,
+  SectionFooter,
   EditorField,
   editorInputClass,
 } from './section-editor';
@@ -36,7 +38,7 @@ export function WebhooksEditor({
   return (
     <InlineSection<WebhookDraft>
       title="Webhooks"
-      description="Where Cortex pushes events. Leave blank to disable. URLs are admin-only — clients never see them."
+      description="Where Cortex pushes events. Leave blank to disable. URLs are admin-only, clients never see them."
       initial={initial}
       endpoint={`/api/clients/${clientId}`}
       validate={(d) => {
@@ -65,7 +67,7 @@ export function WebhooksEditor({
         <>
           <EditorField
             label="Chat webhook"
-            hint="Google Chat space URL — gets every approval comment + new-drop ping."
+            hint="Google Chat space URL. Gets every approval comment + new-drop ping."
           >
             <input
               type="url"
@@ -77,7 +79,7 @@ export function WebhooksEditor({
           </EditorField>
           <EditorField
             label="Revision webhook"
-            hint="Frame.io / Monday / Slack — fires on revision request."
+            hint="Frame.io / Monday / Slack. Fires on revision request."
           >
             <input
               type="url"
@@ -167,11 +169,12 @@ export function UpPromoteEditor({
     }
   }
 
+  const showFooter = dirty || connected;
   return (
-    <section>
-      <header className="mb-4">
-        <h2 className="ui-section-title">UpPromote</h2>
-        <p className="mt-1.5 text-[13px] text-text-muted leading-relaxed max-w-[60ch]">
+    <SectionCard
+      title="UpPromote"
+      description={
+        <>
           Pulls affiliate earnings + new sign-ups for the weekly digest.
           {connected && maskedKey && (
             <>
@@ -179,61 +182,55 @@ export function UpPromoteEditor({
               Current key: <span className="font-mono text-text-secondary">{maskedKey}</span>
             </>
           )}
-        </p>
-      </header>
-      <div className="rounded-2xl border border-nativz-border bg-surface overflow-hidden">
-        <div className="px-5 py-5 sm:px-6 sm:py-6">
-          <EditorField
-            label="API key"
-            hint={
-              connected
-                ? 'Paste a new key to replace the current one, or use Disconnect to remove it.'
-                : 'Paste the key from UpPromote → Settings → API.'
+        </>
+      }
+      headerAction={
+        <StatusPill kind={connected ? 'connected' : 'idle'}>
+          {connected ? 'Connected' : 'Not connected'}
+        </StatusPill>
+      }
+      footer={
+        showFooter ? (
+          <SectionFooter
+            saving={saving}
+            onSave={handleSave}
+            saveLabel={connected ? 'Update key' : 'Connect'}
+            disabled={!dirty}
+            leftSlot={
+              connected ? (
+                <button
+                  type="button"
+                  onClick={handleDisconnect}
+                  disabled={saving || disconnecting}
+                  className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium text-rose-300 hover:bg-rose-500/10 disabled:opacity-60 transition-colors"
+                >
+                  {disconnecting && <Loader2 size={12} className="animate-spin" />}
+                  Disconnect
+                </button>
+              ) : undefined
             }
-          >
-            <input
-              type="password"
-              autoComplete="off"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              className={editorInputClass}
-              placeholder={connected ? '••••••••••••' : 'up_live_...'}
-            />
-          </EditorField>
-        </div>
-        <footer
-          className={`flex items-center justify-between gap-3 border-t border-nativz-border/70 px-5 sm:px-6 py-3 transition-colors ${
-            dirty ? 'bg-accent-surface/30' : 'bg-surface-hover/20'
-          }`}
-        >
-          <div className="flex items-center gap-3 min-w-0">
-            {connected && (
-              <button
-                type="button"
-                onClick={handleDisconnect}
-                disabled={saving || disconnecting}
-                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-rose-300 hover:bg-rose-500/10 disabled:opacity-60 transition-colors"
-              >
-                {disconnecting && <Loader2 size={12} className="animate-spin" />}
-                Disconnect
-              </button>
-            )}
-            {!connected && (
-              <span className="text-[11.5px] text-text-muted opacity-60">Not connected</span>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={!dirty || saving || disconnecting}
-            className="inline-flex items-center gap-1.5 rounded-full bg-accent px-4 py-1.5 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          >
-            {saving && <Loader2 size={12} className="animate-spin" />}
-            {connected ? 'Update key' : 'Connect'}
-          </button>
-        </footer>
-      </div>
-    </section>
+          />
+        ) : null
+      }
+    >
+      <EditorField
+        label="API key"
+        hint={
+          connected
+            ? 'Paste a new key to replace the current one, or use Disconnect to remove it.'
+            : 'Paste the key from UpPromote → Settings → API.'
+        }
+      >
+        <input
+          type="password"
+          autoComplete="off"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          className={editorInputClass}
+          placeholder={connected ? '••••••••••••' : 'up_live_...'}
+        />
+      </EditorField>
+    </SectionCard>
   );
 }
 
@@ -257,13 +254,6 @@ const PLATFORM_LABELS: Record<string, string> = {
   x: 'X',
 };
 
-const STATUS_OPTIONS: { value: ConnectionStatus; label: string }[] = [
-  { value: 'connected', label: 'Connected' },
-  { value: 'pending', label: 'Pending' },
-  { value: 'disconnected', label: 'Disconnected' },
-  { value: 'error', label: 'Error' },
-];
-
 type SocialRow = {
   platform: string;
   handle: string | null;
@@ -272,7 +262,7 @@ type SocialRow = {
 };
 
 /**
- * Inline social-accounts editor — one row per platform, each row has its own
+ * Inline social-accounts editor: one row per platform, each row has its own
  * handle input, status select, and Save/Disconnect actions. Save only
  * activates when the row is dirty. Disconnect only appears for currently
  * connected platforms.
@@ -287,24 +277,20 @@ export function SocialAccountsEditor({
   platforms: string[];
 }) {
   return (
-    <section>
-      <header className="mb-4">
-        <h2 className="ui-section-title">Social accounts</h2>
-        <p className="mt-1.5 text-[13px] text-text-muted leading-relaxed max-w-[60ch]">
-          Connected handles used for posting, analytics, and the weekly social digest.
-        </p>
-      </header>
-      <div className="rounded-2xl border border-nativz-border bg-surface overflow-hidden divide-y divide-nativz-border/70">
-        {platforms.map((platform) => (
-          <SocialAccountRow
-            key={platform}
-            clientId={clientId}
-            platform={platform}
-            initial={initial[platform]}
-          />
-        ))}
-      </div>
-    </section>
+    <SectionCard
+      title="Social accounts"
+      description="Connected handles used for posting, analytics, and the weekly social digest."
+      bodyClassName="divide-y divide-nativz-border/60"
+    >
+      {platforms.map((platform) => (
+        <SocialAccountRow
+          key={platform}
+          clientId={clientId}
+          platform={platform}
+          initial={initial[platform]}
+        />
+      ))}
+    </SectionCard>
   );
 }
 
@@ -322,31 +308,26 @@ function SocialAccountRow({
   const label = PLATFORM_LABELS[platform] ?? platform;
 
   const initialHandle = (initial?.handle ?? '').replace(/^@+/, '');
-  const initialStatus: ConnectionStatus =
+  const status: ConnectionStatus =
     initial?.connection_status ?? (initial?.handle ? 'connected' : 'pending');
 
   const [handle, setHandle] = useState(initialHandle);
-  const [status, setStatus] = useState<ConnectionStatus>(initialStatus);
   const [saving, setSaving] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
-  const baselineRef = useRef({ handle: initialHandle, status: initialStatus });
+  const baselineRef = useRef(initialHandle);
 
   useEffect(() => {
-    baselineRef.current = { handle: initialHandle, status: initialStatus };
+    baselineRef.current = initialHandle;
     setHandle(initialHandle);
-    setStatus(initialStatus);
-  }, [initialHandle, initialStatus]);
+  }, [initialHandle]);
 
-  const dirty = useMemo(
-    () => handle.trim() !== baselineRef.current.handle || status !== baselineRef.current.status,
-    [handle, status],
-  );
+  const dirty = useMemo(() => handle.trim() !== baselineRef.current, [handle]);
   const isConnected = initial?.connection_status === 'connected';
 
   async function handleSave() {
     const trimmed = handle.trim().replace(/^@+/, '');
-    if (status === 'connected' && !trimmed) {
-      toast.error('Add a handle before marking as connected');
+    if (!trimmed) {
+      toast.error('Add a handle before saving');
       return;
     }
     setSaving(true);
@@ -357,8 +338,8 @@ function SocialAccountRow({
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            handle: trimmed || null,
-            connection_status: status,
+            handle: trimmed,
+            connection_status: 'connected',
             connected_via: 'manual',
           }),
         },
@@ -368,7 +349,7 @@ function SocialAccountRow({
         throw new Error(data.error || `Save failed (${res.status})`);
       }
       toast.success(`${label} saved`);
-      baselineRef.current = { handle: trimmed, status };
+      baselineRef.current = trimmed;
       setHandle(trimmed);
       router.refresh();
     } catch (e) {
@@ -398,18 +379,29 @@ function SocialAccountRow({
     }
   }
 
+  const statusMeta: Record<ConnectionStatus, { dot: string; label: string }> = {
+    connected: { dot: 'bg-emerald-400', label: 'Connected' },
+    pending: { dot: 'bg-amber-400', label: 'Pending' },
+    disconnected: { dot: 'bg-text-muted/40', label: 'Not connected' },
+    error: { dot: 'bg-rose-400', label: 'Error' },
+  };
+  const sm = statusMeta[status];
+
   return (
-    <div className="flex flex-wrap items-center gap-3 px-5 sm:px-6 py-4">
-      <div className="flex items-center gap-3 min-w-[9rem]">
+    <div className="flex items-center gap-4 px-5 sm:px-6 py-3.5">
+      <div className="flex items-center gap-3 min-w-[10rem] shrink-0">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-surface ring-1 ring-inset ring-accent/15">
           {Icon && <Icon size={15} className="text-accent-text" />}
         </div>
         <div className="min-w-0">
           <div className="text-[13px] font-medium text-text-primary leading-tight">{label}</div>
-          <StatusDot status={status} />
+          <div className="mt-0.5 flex items-center gap-1.5">
+            <span className={`h-1.5 w-1.5 rounded-full ${sm.dot}`} />
+            <span className="text-[11px] text-text-muted">{sm.label}</span>
+          </div>
         </div>
       </div>
-      <div className="flex flex-1 items-center gap-1 min-w-[12rem]">
+      <div className="flex flex-1 items-center gap-1 min-w-0">
         <span className="text-text-muted text-sm select-none pl-1">@</span>
         <input
           type="text"
@@ -420,59 +412,59 @@ function SocialAccountRow({
           className={`${editorInputClass} flex-1`}
         />
       </div>
-      <select
-        value={status}
-        onChange={(e) => setStatus(e.target.value as ConnectionStatus)}
-        className={`${editorInputClass} w-[10rem] shrink-0`}
-      >
-        {STATUS_OPTIONS.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
-      </select>
-      <div className="flex items-center gap-1 shrink-0">
-        {isConnected && (
+      <div className="flex items-center gap-2 shrink-0">
+        {isConnected && !dirty && (
           <button
             type="button"
             onClick={handleDisconnect}
             disabled={saving || disconnecting}
-            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-rose-300 hover:bg-rose-500/10 disabled:opacity-60 transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium text-rose-300 hover:bg-rose-500/10 disabled:opacity-60 transition-colors"
           >
             {disconnecting && <Loader2 size={12} className="animate-spin" />}
             Disconnect
           </button>
         )}
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={!dirty || saving || disconnecting}
-          className="inline-flex items-center gap-1.5 rounded-full bg-accent px-4 py-1.5 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-        >
-          {saving ? (
-            <Loader2 size={12} className="animate-spin" />
-          ) : isConnected ? null : (
-            <Plug2 size={12} />
-          )}
-          {isConnected ? 'Save' : 'Connect'}
-        </button>
+        {dirty && (
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving || disconnecting}
+            className="inline-flex items-center gap-1.5 rounded-full bg-accent px-4 py-1.5 text-[12px] font-medium text-white hover:bg-accent-hover disabled:opacity-60 transition-colors"
+          >
+            {saving ? (
+              <Loader2 size={12} className="animate-spin" />
+            ) : !isConnected ? (
+              <Plug2 size={12} />
+            ) : null}
+            {isConnected ? 'Save' : 'Connect'}
+          </button>
+        )}
       </div>
     </div>
   );
 }
 
-function StatusDot({ status }: { status: ConnectionStatus }) {
-  const style: Record<ConnectionStatus, { dot: string; label: string }> = {
-    connected: { dot: 'bg-emerald-400', label: 'Connected' },
-    pending: { dot: 'bg-amber-400', label: 'Pending' },
-    disconnected: { dot: 'bg-text-muted/40', label: 'Disconnected' },
-    error: { dot: 'bg-rose-400', label: 'Error' },
-  };
-  const s = style[status];
+function StatusPill({
+  kind,
+  children,
+}: {
+  kind: 'connected' | 'idle';
+  children: React.ReactNode;
+}) {
+  const cls =
+    kind === 'connected'
+      ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-200'
+      : 'border-nativz-border bg-background/60 text-text-muted';
   return (
-    <div className="flex items-center gap-1.5 mt-0.5">
-      <span className={`h-1.5 w-1.5 rounded-full ${s.dot}`} />
-      <span className="text-[10.5px] text-text-muted">{s.label}</span>
-    </div>
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${cls}`}
+    >
+      <span
+        className={`h-1.5 w-1.5 rounded-full ${
+          kind === 'connected' ? 'bg-emerald-400' : 'bg-text-muted/50'
+        }`}
+      />
+      {children}
+    </span>
   );
 }

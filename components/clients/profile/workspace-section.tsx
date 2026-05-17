@@ -4,9 +4,10 @@ import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 
 /**
- * Workspace-settings section: a labelled block with a stack of rows in a
- * card. Title + description sit OUTSIDE the card so the card itself stays
- * a clean row container. Matches the Dovetail settings layout.
+ * Workspace-settings section: Dovetail-style card with the section title
+ * + description living INSIDE at the top, a hairline divider, then the
+ * stacked rows. Title slot doubles as the section header, no separate
+ * label above the card.
  */
 export function WorkspaceSection({
   title,
@@ -28,19 +29,26 @@ export function WorkspaceSection({
   children: React.ReactNode;
 }) {
   return (
-    <section className="space-y-3" id={anchor}>
-      <header className="flex items-end justify-between gap-3">
+    <section
+      id={anchor}
+      className="scroll-mt-24 rounded-2xl border border-nativz-border bg-surface overflow-hidden"
+    >
+      <header className="flex items-start justify-between gap-4 px-5 sm:px-6 pt-5 sm:pt-6 pb-4">
         <div className="min-w-0">
-          <h2 className="text-sm font-semibold text-text-primary leading-tight">{title}</h2>
+          <h2 className="text-[15px] font-semibold text-text-primary leading-tight">
+            {title}
+          </h2>
           {description && (
-            <p className="text-xs text-text-muted mt-1 leading-relaxed">{description}</p>
+            <p className="mt-1 text-[12.5px] text-text-muted leading-relaxed max-w-[58ch]">
+              {description}
+            </p>
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {openHref && (
             <Link
               href={openHref}
-              className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-text-primary transition-colors"
+              className="inline-flex items-center gap-1 text-[12px] text-text-muted hover:text-text-primary transition-colors"
             >
               {openLabel}
               <ArrowUpRight size={12} />
@@ -49,9 +57,8 @@ export function WorkspaceSection({
           {action}
         </div>
       </header>
-      <div className="rounded-xl border border-nativz-border bg-surface overflow-hidden">
-        {children}
-      </div>
+      <div className="border-t border-nativz-border/70" />
+      <div>{children}</div>
     </section>
   );
 }
@@ -61,9 +68,9 @@ export function WorkspaceSection({
  *
  *   [optional icon] [label / hint stack flex-1] [value or rightSlot]
  *
- * Mirrors the Dovetail settings row: bold label, tiny hint underneath,
- * right-aligned action or short value. Long-form values wrap under the
- * label using `multiline` so the right side stays a thin column.
+ * Bold label, tiny hint underneath, right-aligned action or short value.
+ * Long-form values wrap under the label using `multiline` so the right
+ * side stays a thin column.
  */
 export function WorkspaceRow({
   icon: Icon,
@@ -98,27 +105,27 @@ export function WorkspaceRow({
 
   const showRight = !multiline && (rightSlot !== undefined || hasValue || empty);
   const valueTextClass = cn(
-    'text-sm text-right max-w-[28rem] truncate',
+    'text-[13px] text-right max-w-[28rem] truncate',
     hasValue ? 'text-text-primary' : 'italic text-text-muted',
     mono && 'font-mono text-xs',
   );
 
   return (
-    <div className="group relative flex items-start gap-3 px-4 py-4 border-b border-nativz-border/60 last:border-b-0">
+    <div className="group relative flex items-start gap-3 px-5 sm:px-6 py-4 border-b border-nativz-border/60 last:border-b-0">
       {Icon && (
         <div className="shrink-0 pt-0.5 text-text-muted">
           <Icon size={16} />
         </div>
       )}
       <div className="min-w-0 flex-1">
-        <div className="text-sm font-medium text-text-primary leading-tight">{label}</div>
+        <div className="text-[13px] font-medium text-text-primary leading-tight">{label}</div>
         {hint && (
-          <div className="text-xs text-text-muted mt-1 leading-relaxed">{hint}</div>
+          <div className="text-[12px] text-text-muted mt-1 leading-relaxed">{hint}</div>
         )}
         {multiline && hasValue && (
           <div
             className={cn(
-              'mt-2 text-sm whitespace-pre-wrap leading-relaxed',
+              'mt-2 text-[13px] whitespace-pre-wrap leading-relaxed',
               mono ? 'font-mono text-xs text-text-primary' : 'text-text-primary',
             )}
           >

@@ -1,49 +1,38 @@
 import type { LucideIcon } from 'lucide-react';
 
 /**
- * Page-top header for client settings pages. Renders an icon tile + title +
- * subtitle, with an optional right-side action slot (typically Edit / Save /
- * Cancel buttons). Matches the icon-tile + title pattern from the reference
- * design while preserving our color palette + rounded corners.
+ * Page-top header for client settings pages. Dovetail-style: a clean H1
+ * with a small subtitle beneath, no icon tile, no eyebrow. Each card on
+ * the page carries its own in-card title; this header just identifies
+ * the current subpage.
+ *
+ * `icon` is accepted for API compatibility with older call sites but is
+ * intentionally not rendered.
  */
 export function SettingsPageHeader({
-  icon: Icon,
   title,
   subtitle,
-  eyebrow,
   action,
 }: {
-  icon: LucideIcon;
+  icon?: LucideIcon;
   title: string;
   subtitle?: string;
   eyebrow?: string;
   action?: React.ReactNode;
 }) {
   return (
-    <div className="pb-6 mb-2 border-b border-nativz-border/60">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div className="flex items-start gap-3.5 min-w-0">
-          {/* Icon tile is a full circle per Nativz brand guide (icon backings
-              beside labels are circles, not rounded squares). */}
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-surface ring-1 ring-inset ring-accent/25">
-            <Icon size={17} className="text-accent-text" />
-          </div>
-          <div className="min-w-0 pt-0.5 space-y-1">
-            {eyebrow && (
-              <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted">
-                {eyebrow}
-              </div>
-            )}
-            <h1 className="ui-page-title-md">{title}</h1>
-            {subtitle && (
-              <p className="text-[13px] text-text-muted leading-relaxed max-w-[62ch]">
-                {subtitle}
-              </p>
-            )}
-          </div>
-        </div>
-        {action && <div className="shrink-0 pt-1">{action}</div>}
+    <div className="pb-4 mb-2 flex items-start justify-between gap-4 flex-wrap">
+      <div className="min-w-0 space-y-1">
+        <h1 className="text-[22px] sm:text-[26px] font-semibold text-text-primary leading-tight tracking-[-0.01em]">
+          {title}
+        </h1>
+        {subtitle && (
+          <p className="text-[13px] text-text-muted leading-relaxed max-w-[62ch]">
+            {subtitle}
+          </p>
+        )}
       </div>
+      {action && <div className="shrink-0 pt-1">{action}</div>}
     </div>
   );
 }

@@ -6,9 +6,11 @@ import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 
 /**
- * Self-saving toggle row used inside WorkspaceSection. Hits the main
- * /api/clients/[id] PATCH endpoint with `{ [field]: boolean }`. Optimistic
- * UI: flips immediately, rolls back on failure.
+ * Self-saving toggle row used inside a WorkspaceSection / SectionCard.
+ * Hits the main /api/clients/[id] PATCH endpoint with `{ [field]: boolean }`.
+ * Optimistic UI: flips immediately, rolls back on failure.
+ *
+ * Renders flat (no own surface) so it stacks cleanly between dividers.
  */
 export function NotificationToggleRow({
   clientId,
@@ -48,34 +50,31 @@ export function NotificationToggleRow({
   }
 
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 px-4 py-3.5 border-b border-nativz-border/60 last:border-b-0">
-      <div className="min-w-0">
-        <div className="text-sm font-medium text-text-primary">{label}</div>
+    <div className="flex items-start gap-4 px-5 sm:px-6 py-4 border-b border-nativz-border/60 last:border-b-0">
+      <div className="min-w-0 flex-1">
+        <div className="text-[13px] font-medium text-text-primary leading-tight">{label}</div>
         {description && (
-          <div className="text-xs text-text-muted mt-0.5 leading-relaxed">{description}</div>
+          <div className="text-[12px] text-text-muted mt-1 leading-relaxed">{description}</div>
         )}
       </div>
-      <button
-        type="button"
-        onClick={toggle}
-        disabled={pending}
-        aria-pressed={enabled}
-        className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
-          enabled ? 'bg-accent' : 'bg-nativz-border'
-        } disabled:opacity-60`}
-      >
-        <span
-          className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-            enabled ? 'translate-x-[18px]' : 'translate-x-0.5'
-          }`}
-        />
-        {pending && (
-          <Loader2
-            size={10}
-            className="absolute -right-4 top-1/2 -translate-y-1/2 animate-spin text-text-muted"
+      <div className="flex items-center gap-2 shrink-0 pt-0.5">
+        {pending && <Loader2 size={11} className="animate-spin text-text-muted" />}
+        <button
+          type="button"
+          onClick={toggle}
+          disabled={pending}
+          aria-pressed={enabled}
+          className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
+            enabled ? 'bg-accent' : 'bg-nativz-border'
+          } disabled:opacity-60`}
+        >
+          <span
+            className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
+              enabled ? 'translate-x-[18px]' : 'translate-x-0.5'
+            }`}
           />
-        )}
-      </button>
+        </button>
+      </div>
     </div>
   );
 }

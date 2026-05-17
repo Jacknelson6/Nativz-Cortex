@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { InlineSection, EditorField } from './section-editor';
+import { InlineSection, EditorField, editorInputClass } from './section-editor';
 
 type TeamDraft = {
   default_strategist_id: string | null;
@@ -11,8 +11,7 @@ type TeamDraft = {
 
 type Member = { id: string; full_name: string | null; email: string };
 
-const selectClass =
-  'w-full rounded-md border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-accent disabled:opacity-50';
+const selectClass = `${editorInputClass} disabled:opacity-50`;
 
 export function TeamEditor({
   clientId,
@@ -90,7 +89,7 @@ function RosterFields({
           onChange={(e) => set({ default_strategist_id: e.target.value || null })}
           className={selectClass}
         >
-          <option value="">— Unassigned —</option>
+          <option value="">Unassigned</option>
           {strategists.map((m) => (
             <option key={m.id} value={m.id}>
               {display(m)}
@@ -109,7 +108,7 @@ function RosterFields({
           onChange={(e) => set({ default_editor_id: e.target.value || null })}
           className={selectClass}
         >
-          <option value="">— Unassigned —</option>
+          <option value="">Unassigned</option>
           {editors.map((m) => (
             <option key={m.id} value={m.id}>
               {display(m)}
