@@ -1,5 +1,9 @@
 'use client';
 
+import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
+import { Pencil, X, Loader2, Plug2 } from 'lucide-react';
 import {
   SectionEditor,
   EditorField,
@@ -126,5 +130,225 @@ export function UpPromoteEditor({
         </EditorField>
       )}
     </SectionEditor>
+  );
+}
+
+/**
+ * SocialAccountEditor — per-platform editor for the integrations page.
+ * Custom dialog (not SectionEditor) because we want Save + Disconnect
+ * actions in the same drawer, and a status selector beside the handle.
+ *
+ * Writes through `/api/clients/[id]/social-accounts/[platform]` which
+ * delegates to `upsertClientSocialAccount`. Idempotent on (client, platform).
+ */
+type ConnectionStatus = 'pending' | 'connected' | 'disconnected' | 'error';
+
+const STATUS_OPTIONS: { value: ConnectionStatus; label: string }[] = [
+  { value: 'connected', label: 'Connected' },
+  { value: 'pending', label: 'Pending' },
+  { value: 'disconnected', label: 'Disconnected' },
+  { value: 'error', label: 'Error' },
+];
+
+export function SocialAccountEditor({
+  clientId,
+  platform,
+  platformLabel,
+  initial,
+}: {
+  clientId: string;
+  platform: string;
+  platformLabel: string;
+  initial: {
+    handle: string | null;
+    connection_status: ConnectionStatus | null;
+    connected_via: string | null;
+  };
+}) {
+  const router = useRouter();
+  const dialogRef = useRef<HTMLDialogElement | null>(null);
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+  const [handle, setHandle] = useState(initial.handle ?? '');
+  const [status, setStatus] = useState<ConnectionStatus>(
+    initial.connection_status ?? 'connected',
+  );
+
+  const isConnected = initial.connection_status === 'connected';
+
+  useEffect(() => {
+    if (open) {
+      setHandle(initial.handle ?? '');
+      setStatus(initial.connection_status ?? 'connected');
+      dialogRef.current?.showModal();
+    } else {
+      dialogRef.current?.close();
+    }
+  }, [open, initial.handle, initial.connection_status]);
+
+  async function handleSave() {
+    const trimmed = handle.trim().replace(/^@+/, '');
+    if (status === 'connected' && !trimmed) {
+      toast.error('Add a handle before marking as connected');
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/clients/${clientId}/social-accounts/${platform}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          handle: trimmed || null,
+          connection_status: status,
+          connected_via: 'manual',
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Save failed (${res.status})`);
+      }
+      toast.success('Saved');
+      setOpen(false);
+      router.refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Save failed');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDisconnect() {
+    setDisconnecting(true);
+    try {
+      const res = await fetch(`/api/clients/${clientId}/social-accounts/${platform}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Disconnect failed (${res.status})`);
+      }
+      toast.success(`Disconnected ${platformLabel}`);
+      setOpen(false);
+      router.refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Disconnect failed');
+    } finally {
+      setDisconnecting(false);
+    }
+  }
+
+  const buttonLabel = isConnected ? 'Edit' : 'Connect';
+  const ButtonIcon = isConnected ? Pencil : Plug2;
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="inline-flex items-center gap-1 rounded-full border border-nativz-border bg-surface px-2.5 py-1 text-[11px] text-text-muted hover:text-text-primary hover:bg-surface-hover transition-colors shrink-0"
+      >
+        <ButtonIcon size={11} />
+        {buttonLabel}
+      </button>
+
+      <dialog
+        ref={dialogRef}
+        onClose={() => setOpen(false)}
+        onCancel={(e) => {
+          e.preventDefault();
+          setOpen(false);
+        }}
+        className="m-auto w-[min(520px,calc(100vw-2rem))] rounded-2xl border border-nativz-border bg-surface p-0 text-text-primary backdrop:bg-black/60"
+      >
+        {open && (
+          <div className="flex max-h-[85vh] flex-col">
+            <header className="flex items-start justify-between gap-3 border-b border-nativz-border px-5 py-4">
+              <div className="min-w-0">
+                <h3 className="text-sm font-semibold text-text-primary">
+                  {platformLabel} account
+                </h3>
+                <p className="text-xs text-text-muted mt-1 leading-relaxed">
+                  Handle and status the rest of Cortex uses for posting, analytics, and digests.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="rounded-md p-1 text-text-muted hover:text-text-primary hover:bg-surface-hover"
+                aria-label="Close"
+              >
+                <X size={16} />
+              </button>
+            </header>
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+              <EditorField
+                label="Handle"
+                hint="Without the @. Used in captions, share links, and the social digest."
+              >
+                <input
+                  type="text"
+                  autoComplete="off"
+                  value={handle}
+                  onChange={(e) => setHandle(e.target.value)}
+                  className={editorInputClass}
+                  placeholder="brandname"
+                />
+              </EditorField>
+              <EditorField
+                label="Connection status"
+                hint="Mark as connected once posting + analytics are wired. Pending = handle known but Zernio not linked yet."
+              >
+                <select
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value as ConnectionStatus)}
+                  className={editorInputClass}
+                >
+                  {STATUS_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </EditorField>
+            </div>
+            <footer className="flex items-center justify-between gap-2 border-t border-nativz-border bg-surface-hover/40 px-5 py-3">
+              <div>
+                {isConnected && (
+                  <button
+                    type="button"
+                    onClick={handleDisconnect}
+                    disabled={saving || disconnecting}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-red-400/30 bg-red-500/5 px-3 py-1.5 text-xs font-medium text-red-300 hover:bg-red-500/10 disabled:opacity-60"
+                  >
+                    {disconnecting && <Loader2 size={12} className="animate-spin" />}
+                    Disconnect
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  disabled={saving || disconnecting}
+                  className="rounded-md px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary hover:bg-surface-hover disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={saving || disconnecting}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-60"
+                >
+                  {saving && <Loader2 size={12} className="animate-spin" />}
+                  Save changes
+                </button>
+              </div>
+            </footer>
+          </div>
+        )}
+      </dialog>
+    </>
   );
 }

@@ -10,6 +10,7 @@ import {
 import {
   WebhooksEditor,
   UpPromoteEditor,
+  SocialAccountEditor,
 } from '@/components/clients/profile/integrations-editors';
 
 export const dynamic = 'force-dynamic';
@@ -22,10 +23,12 @@ type ClientRow = {
   paid_media_webhook_url: string | null;
 };
 
+type ConnectionStatus = 'pending' | 'connected' | 'disconnected' | 'error';
+
 type SocialAccount = {
   platform: string;
   handle: string | null;
-  connection_status: string | null;
+  connection_status: ConnectionStatus | null;
   connected_via: string | null;
   connected_at: string | null;
 };
@@ -114,22 +117,40 @@ export default async function ProfileIntegrationsPage({
               key={key}
               label={meta.label}
               hint={connectedHint(account)}
-              value={
-                account?.handle ? (
-                  <span className="flex items-center gap-2">
-                    <Icon size={14} className="text-text-muted" />
-                    <span className="font-mono text-xs">@{account.handle}</span>
-                    {isConnected ? (
-                      <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
-                        Connected
-                      </span>
-                    ) : account?.connection_status ? (
-                      <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] font-medium text-amber-300">
-                        {account.connection_status}
-                      </span>
-                    ) : null}
-                  </span>
-                ) : null
+              rightSlot={
+                <div className="flex w-full items-center justify-between gap-3">
+                  <div className="min-w-0 flex items-center gap-2">
+                    {account?.handle ? (
+                      <>
+                        <Icon size={14} className="text-text-muted shrink-0" />
+                        <span className="font-mono text-xs truncate text-text-primary">
+                          @{account.handle}
+                        </span>
+                        {isConnected ? (
+                          <span className="shrink-0 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
+                            Connected
+                          </span>
+                        ) : account?.connection_status ? (
+                          <span className="shrink-0 rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] font-medium text-amber-300">
+                            {account.connection_status}
+                          </span>
+                        ) : null}
+                      </>
+                    ) : (
+                      <span className="text-xs italic text-text-muted">Not connected</span>
+                    )}
+                  </div>
+                  <SocialAccountEditor
+                    clientId={client.id}
+                    platform={key}
+                    platformLabel={meta.label}
+                    initial={{
+                      handle: account?.handle ?? null,
+                      connection_status: account?.connection_status ?? null,
+                      connected_via: account?.connected_via ?? null,
+                    }}
+                  />
+                </div>
               }
             />
           );
