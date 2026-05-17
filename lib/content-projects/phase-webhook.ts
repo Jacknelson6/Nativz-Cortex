@@ -3,7 +3,7 @@
  *
  * Fires on every editing_projects.phase transition. Routes:
  *   1. Per-client Google Chat space (clients.chat_webhook_url)
- *   2. Global Ops space (OPS_GOOGLE_CHAT_WEBHOOK_URL env)
+ *   2. Global Ops space (OPS_CHAT_WEBHOOK_URL env)
  *
  * Both targets receive the same Card V2 payload. We also mirror to
  * activity_log so the Cortex UI can derive a Notifications feed without
@@ -18,7 +18,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { buildChatCardMessage, postToGoogleChatSafe } from '@/lib/chat/post-to-google-chat';
 import type { EditingProjectPhase } from '@/lib/editing/types';
 
-const OPS_WEBHOOK_ENV = 'OPS_GOOGLE_CHAT_WEBHOOK_URL';
+const OPS_WEBHOOK_ENV = 'OPS_CHAT_WEBHOOK_URL';
 
 export interface PhaseTransitionEvent {
   projectId: string;
