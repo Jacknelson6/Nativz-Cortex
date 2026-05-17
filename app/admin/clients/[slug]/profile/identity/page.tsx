@@ -59,6 +59,7 @@ export default async function ProfileIdentityPage({
   return (
     <>
       <SettingsPageHeader
+        eyebrow="Brand profile"
         icon={IdCard}
         title="Identity"
         subtitle="The brand's name, voice, products, and the captions we paste under every post."

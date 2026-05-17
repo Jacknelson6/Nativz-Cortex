@@ -152,7 +152,9 @@ export function SectionEditor<T extends Record<string, unknown>>({
 }
 
 /**
- * Minimal labelled input field used inside SectionEditor drawers.
+ * Labelled field used inside SectionEditor / InlineSection. On wide screens
+ * the label + hint sit in a narrow left column and the control fills the
+ * right; on narrow screens it collapses to a vertical stack.
  */
 export function EditorField({
   label,
@@ -164,19 +166,21 @@ export function EditorField({
   children: ReactNode;
 }) {
   return (
-    <label className="block space-y-1.5">
-      <div>
-        <div className="text-xs font-medium text-text-secondary">{label}</div>
-        {hint && <div className="text-[11px] text-text-muted mt-0.5">{hint}</div>}
+    <label className="grid gap-2 sm:grid-cols-[180px_minmax(0,1fr)] sm:gap-x-6 sm:gap-y-1">
+      <div className="sm:pt-2">
+        <div className="text-[12px] font-medium text-text-primary leading-snug">{label}</div>
+        {hint && (
+          <div className="text-[11.5px] text-text-muted leading-relaxed mt-1">{hint}</div>
+        )}
       </div>
-      {children}
+      <div className="min-w-0">{children}</div>
     </label>
   );
 }
 
 export const editorInputClass =
-  'w-full rounded-md border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent';
-export const editorTextareaClass = `${editorInputClass} min-h-[88px] resize-y leading-relaxed`;
+  'w-full rounded-lg border border-nativz-border bg-background px-3.5 py-2.5 text-sm text-text-primary placeholder:text-text-muted/70 transition-colors hover:border-nativz-border/80 focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/15';
+export const editorTextareaClass = `${editorInputClass} min-h-[96px] resize-y leading-relaxed`;
 
 /**
  * InlineSection — Dovetail-style settings section. Title + description live
@@ -262,35 +266,53 @@ export function InlineSection<T extends Record<string, unknown>>({
   }
 
   return (
-    <section className="space-y-3" id={anchor}>
-      <header className="space-y-1">
-        <h2 className="text-sm font-semibold text-text-primary leading-tight">{title}</h2>
+    <section className="scroll-mt-24" id={anchor}>
+      <header className="mb-4">
+        <h2 className="ui-section-title">{title}</h2>
         {description && (
-          <p className="text-xs text-text-muted leading-relaxed">{description}</p>
+          <p className="mt-1.5 text-[13px] text-text-muted leading-relaxed max-w-[60ch]">
+            {description}
+          </p>
         )}
       </header>
-      <div className="rounded-xl border border-nativz-border bg-surface overflow-hidden">
-        <div className="px-4 py-4 space-y-4">{children(draft, setPartial)}</div>
-        <footer className="flex items-center justify-end gap-2 border-t border-nativz-border bg-surface-hover/30 px-4 py-2.5">
-          {dirty && (
+      <div className="rounded-2xl border border-nativz-border bg-surface overflow-hidden">
+        <div className="px-5 py-5 sm:px-6 sm:py-6 space-y-5">
+          {children(draft, setPartial)}
+        </div>
+        <footer
+          className={`flex items-center justify-between gap-3 border-t border-nativz-border/70 px-5 sm:px-6 py-3 transition-colors ${
+            dirty ? 'bg-accent-surface/30' : 'bg-surface-hover/20'
+          }`}
+        >
+          <div className="text-[11.5px] text-text-muted min-w-0">
+            {dirty ? (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+                <span>Unsaved changes</span>
+              </span>
+            ) : (
+              <span className="opacity-60">All changes saved</span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
               onClick={handleReset}
-              disabled={saving}
-              className="rounded-md px-3 py-1.5 text-xs text-text-muted hover:text-text-primary hover:bg-surface-hover disabled:opacity-50"
+              disabled={!dirty || saving}
+              className="rounded-full px-3 py-1.5 text-xs text-text-muted hover:text-text-primary hover:bg-surface-hover disabled:opacity-0 disabled:pointer-events-none transition-opacity"
             >
               Discard
             </button>
-          )}
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={!dirty || saving}
-            className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {saving && <Loader2 size={12} className="animate-spin" />}
-            {saveLabel}
-          </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={!dirty || saving}
+              className="inline-flex items-center gap-1.5 rounded-full bg-accent px-4 py-1.5 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              {saving && <Loader2 size={12} className="animate-spin" />}
+              {saveLabel}
+            </button>
+          </div>
         </footer>
       </div>
     </section>

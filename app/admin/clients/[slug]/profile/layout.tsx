@@ -24,9 +24,9 @@ export default async function ClientProfileLayout({
         <ProfileRail slug={slug} />
       </aside>
 
-      <div className="min-w-0 flex-1 px-5 lg:px-8 py-6">
+      <div className="min-w-0 flex-1 px-5 lg:px-10 py-6 lg:py-10">
         <ProfileMobileRail slug={slug} />
-        <div className="max-w-3xl mx-auto pt-6 lg:pt-0 space-y-6">
+        <div className="max-w-3xl mx-auto pt-6 lg:pt-0 space-y-12">
           {children}
         </div>
       </div>

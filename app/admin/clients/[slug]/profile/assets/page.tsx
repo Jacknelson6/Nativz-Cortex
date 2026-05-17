@@ -14,6 +14,7 @@ export default async function ProfileAssetsPage({
   return (
     <>
       <SettingsPageHeader
+        eyebrow="Brand profile"
         icon={Archive}
         title="Assets"
         subtitle="Logos, footage, guidelines, fonts, reference photos. Files the editor pulls from on every project."

@@ -147,6 +147,7 @@ export default async function ProfileUsersPage({
   return (
     <>
       <SettingsPageHeader
+        eyebrow="Brand profile"
         icon={UsersIcon}
         title="Users"
         subtitle="People we talk to + the ones with portal access. One list, one place to manage them."

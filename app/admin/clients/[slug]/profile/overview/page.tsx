@@ -114,6 +114,7 @@ export default async function ProfileOverviewPage({
   return (
     <>
       <SettingsPageHeader
+        eyebrow="Brand profile"
         icon={Eye}
         title="Overview"
         subtitle="A single read of who they are, what we ship, and who's on the account. Jump to a section in the rail to edit."

@@ -43,6 +43,7 @@ export default async function ProfileDeliverablesPage({
   return (
     <>
       <SettingsPageHeader
+        eyebrow="Brand profile"
         icon={Coins}
         title="Deliverables"
         subtitle="What we ship for this brand each month and when it goes live."

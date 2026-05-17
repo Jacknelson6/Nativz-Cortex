@@ -10,27 +10,40 @@ export function SettingsPageHeader({
   icon: Icon,
   title,
   subtitle,
+  eyebrow,
   action,
 }: {
   icon: LucideIcon;
   title: string;
   subtitle?: string;
+  eyebrow?: string;
   action?: React.ReactNode;
 }) {
   return (
-    <div className="flex items-start justify-between gap-3 flex-wrap">
-      <div className="flex items-start gap-3 min-w-0">
-        {/* Icon tile is a full circle per Nativz brand guide (icon backings
-            beside labels are circles, not rounded squares). */}
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-surface ring-1 ring-inset ring-accent/20">
-          <Icon size={16} className="text-accent-text" />
+    <div className="pb-6 mb-2 border-b border-nativz-border/60">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="flex items-start gap-3.5 min-w-0">
+          {/* Icon tile is a full circle per Nativz brand guide (icon backings
+              beside labels are circles, not rounded squares). */}
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-surface ring-1 ring-inset ring-accent/25">
+            <Icon size={17} className="text-accent-text" />
+          </div>
+          <div className="min-w-0 pt-0.5 space-y-1">
+            {eyebrow && (
+              <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted">
+                {eyebrow}
+              </div>
+            )}
+            <h1 className="ui-page-title-md">{title}</h1>
+            {subtitle && (
+              <p className="text-[13px] text-text-muted leading-relaxed max-w-[62ch]">
+                {subtitle}
+              </p>
+            )}
+          </div>
         </div>
-        <div className="min-w-0 pt-0.5">
-          <h1 className="ui-page-title">{title}</h1>
-          {subtitle && <p className="text-sm text-text-muted mt-0.5">{subtitle}</p>}
-        </div>
+        {action && <div className="shrink-0 pt-1">{action}</div>}
       </div>
-      {action && <div className="shrink-0">{action}</div>}
     </div>
   );
 }

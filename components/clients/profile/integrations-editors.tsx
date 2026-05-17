@@ -168,10 +168,10 @@ export function UpPromoteEditor({
   }
 
   return (
-    <section className="space-y-3">
-      <header className="space-y-1">
-        <h2 className="text-sm font-semibold text-text-primary leading-tight">UpPromote</h2>
-        <p className="text-xs text-text-muted leading-relaxed">
+    <section>
+      <header className="mb-4">
+        <h2 className="ui-section-title">UpPromote</h2>
+        <p className="mt-1.5 text-[13px] text-text-muted leading-relaxed max-w-[60ch]">
           Pulls affiliate earnings + new sign-ups for the weekly digest.
           {connected && maskedKey && (
             <>
@@ -181,8 +181,8 @@ export function UpPromoteEditor({
           )}
         </p>
       </header>
-      <div className="rounded-xl border border-nativz-border bg-surface overflow-hidden">
-        <div className="px-4 py-4">
+      <div className="rounded-2xl border border-nativz-border bg-surface overflow-hidden">
+        <div className="px-5 py-5 sm:px-6 sm:py-6">
           <EditorField
             label="API key"
             hint={
@@ -201,25 +201,32 @@ export function UpPromoteEditor({
             />
           </EditorField>
         </div>
-        <footer className="flex items-center justify-between gap-2 border-t border-nativz-border bg-surface-hover/30 px-4 py-2.5">
-          <div>
+        <footer
+          className={`flex items-center justify-between gap-3 border-t border-nativz-border/70 px-5 sm:px-6 py-3 transition-colors ${
+            dirty ? 'bg-accent-surface/30' : 'bg-surface-hover/20'
+          }`}
+        >
+          <div className="flex items-center gap-3 min-w-0">
             {connected && (
               <button
                 type="button"
                 onClick={handleDisconnect}
                 disabled={saving || disconnecting}
-                className="inline-flex items-center gap-1.5 rounded-md border border-red-400/30 bg-red-500/5 px-3 py-1.5 text-xs font-medium text-red-300 hover:bg-red-500/10 disabled:opacity-60"
+                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-rose-300 hover:bg-rose-500/10 disabled:opacity-60 transition-colors"
               >
                 {disconnecting && <Loader2 size={12} className="animate-spin" />}
                 Disconnect
               </button>
+            )}
+            {!connected && (
+              <span className="text-[11.5px] text-text-muted opacity-60">Not connected</span>
             )}
           </div>
           <button
             type="button"
             onClick={handleSave}
             disabled={!dirty || saving || disconnecting}
-            className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-1.5 rounded-full bg-accent px-4 py-1.5 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             {saving && <Loader2 size={12} className="animate-spin" />}
             {connected ? 'Update key' : 'Connect'}
@@ -280,16 +287,14 @@ export function SocialAccountsEditor({
   platforms: string[];
 }) {
   return (
-    <section className="space-y-3">
-      <header className="space-y-1">
-        <h2 className="text-sm font-semibold text-text-primary leading-tight">
-          Social accounts
-        </h2>
-        <p className="text-xs text-text-muted leading-relaxed">
+    <section>
+      <header className="mb-4">
+        <h2 className="ui-section-title">Social accounts</h2>
+        <p className="mt-1.5 text-[13px] text-text-muted leading-relaxed max-w-[60ch]">
           Connected handles used for posting, analytics, and the weekly social digest.
         </p>
       </header>
-      <div className="rounded-xl border border-nativz-border bg-surface overflow-hidden">
+      <div className="rounded-2xl border border-nativz-border bg-surface overflow-hidden divide-y divide-nativz-border/70">
         {platforms.map((platform) => (
           <SocialAccountRow
             key={platform}
@@ -394,13 +399,18 @@ function SocialAccountRow({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-nativz-border/60 last:border-b-0">
-      <div className="flex items-center gap-2.5 min-w-[7.5rem]">
-        {Icon && <Icon size={16} className="text-text-muted" />}
-        <span className="text-sm font-medium text-text-primary">{label}</span>
+    <div className="flex flex-wrap items-center gap-3 px-5 sm:px-6 py-4">
+      <div className="flex items-center gap-3 min-w-[9rem]">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-surface ring-1 ring-inset ring-accent/15">
+          {Icon && <Icon size={15} className="text-accent-text" />}
+        </div>
+        <div className="min-w-0">
+          <div className="text-[13px] font-medium text-text-primary leading-tight">{label}</div>
+          <StatusDot status={status} />
+        </div>
       </div>
-      <div className="flex flex-1 items-center gap-2 min-w-[12rem]">
-        <span className="text-text-muted text-sm select-none">@</span>
+      <div className="flex flex-1 items-center gap-1 min-w-[12rem]">
+        <span className="text-text-muted text-sm select-none pl-1">@</span>
         <input
           type="text"
           autoComplete="off"
@@ -421,13 +431,13 @@ function SocialAccountRow({
           </option>
         ))}
       </select>
-      <div className="flex items-center gap-2 shrink-0">
+      <div className="flex items-center gap-1 shrink-0">
         {isConnected && (
           <button
             type="button"
             onClick={handleDisconnect}
             disabled={saving || disconnecting}
-            className="inline-flex items-center gap-1.5 rounded-md border border-red-400/30 bg-red-500/5 px-2.5 py-1.5 text-xs font-medium text-red-300 hover:bg-red-500/10 disabled:opacity-60"
+            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-rose-300 hover:bg-rose-500/10 disabled:opacity-60 transition-colors"
           >
             {disconnecting && <Loader2 size={12} className="animate-spin" />}
             Disconnect
@@ -437,7 +447,7 @@ function SocialAccountRow({
           type="button"
           onClick={handleSave}
           disabled={!dirty || saving || disconnecting}
-          className="inline-flex items-center gap-1.5 rounded-md bg-accent px-2.5 py-1.5 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="inline-flex items-center gap-1.5 rounded-full bg-accent px-4 py-1.5 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           {saving ? (
             <Loader2 size={12} className="animate-spin" />
@@ -447,6 +457,22 @@ function SocialAccountRow({
           {isConnected ? 'Save' : 'Connect'}
         </button>
       </div>
+    </div>
+  );
+}
+
+function StatusDot({ status }: { status: ConnectionStatus }) {
+  const style: Record<ConnectionStatus, { dot: string; label: string }> = {
+    connected: { dot: 'bg-emerald-400', label: 'Connected' },
+    pending: { dot: 'bg-amber-400', label: 'Pending' },
+    disconnected: { dot: 'bg-text-muted/40', label: 'Disconnected' },
+    error: { dot: 'bg-rose-400', label: 'Error' },
+  };
+  const s = style[status];
+  return (
+    <div className="flex items-center gap-1.5 mt-0.5">
+      <span className={`h-1.5 w-1.5 rounded-full ${s.dot}`} />
+      <span className="text-[10.5px] text-text-muted">{s.label}</span>
     </div>
   );
 }

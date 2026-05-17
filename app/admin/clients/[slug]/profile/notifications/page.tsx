@@ -35,6 +35,7 @@ export default async function ProfileNotificationsPage({
   return (
     <>
       <SettingsPageHeader
+        eyebrow="Brand profile"
         icon={Bell}
         title="Notifications"
         subtitle="What we email this client. Toggle these off if a contact prefers Slack or a once-a-month touchpoint instead."

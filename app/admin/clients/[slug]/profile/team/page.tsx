@@ -30,6 +30,7 @@ export default async function ProfileTeamPage({
   return (
     <>
       <SettingsPageHeader
+        eyebrow="Brand profile"
         icon={Users2}
         title="Team"
         subtitle="Who on our side owns this brand's strategy + edits."

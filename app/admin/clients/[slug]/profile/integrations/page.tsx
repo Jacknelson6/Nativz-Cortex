@@ -67,6 +67,7 @@ export default async function ProfileIntegrationsPage({
   return (
     <>
       <SettingsPageHeader
+        eyebrow="Brand profile"
         icon={Plug}
         title="Integrations"
         subtitle="Where Cortex pulls data from and pushes events to. Edit inline, save per section."
