@@ -280,12 +280,14 @@ export async function setStatus(id: string, status: OnboardingStatus): Promise<O
  *
  * Field map (step_state → clients):
  *   tagline         -> tagline
- *   what_we_sell    -> products
  *   audience        -> target_audience
  *   voice           -> brand_voice
  *   current_offers  -> current_offers
  *   website_url     -> website_url
  *   logo_url        -> logo_url
+ *
+ * `what_we_sell` is NOT written here — products live in `client_products`
+ * and are captured by the standalone Products onboarding screen.
  *
  * Only writes fields that are non-empty strings. We never null out an
  * existing clients-row value just because the client cleared a field
@@ -305,7 +307,6 @@ export async function syncBrandBasicsToClient(opts: {
 }): Promise<void> {
   const update: Record<string, string> = {};
   if (opts.basics.tagline?.trim()) update.tagline = opts.basics.tagline.trim();
-  if (opts.basics.what_we_sell?.trim()) update.products = opts.basics.what_we_sell.trim();
   if (opts.basics.audience?.trim()) update.target_audience = opts.basics.audience.trim();
   if (opts.basics.voice?.trim()) update.brand_voice = opts.basics.voice.trim();
   if (opts.basics.current_offers?.trim()) update.current_offers = opts.basics.current_offers.trim();
@@ -391,7 +392,103 @@ export async function markPlatformConnection(opts: {
     .select(ONBOARDING_COLUMNS)
     .single();
   if (upErr) throw new Error(`[onboarding/markPlatformConnection] ${upErr.message}`);
+
+  // Mirror into client_social_accounts so the Integrations profile page
+  // sees real connection state without re-reading onboarding step_state.
+  // Best-effort — wrapped because migration 322 may not be applied yet.
+  await upsertClientSocialAccount({
+    client_id: opts.client_id,
+    platform: opts.platform,
+    handle: opts.username ?? null,
+    external_account_id: opts.zernio_account_id ?? null,
+    connection_status:
+      opts.status === 'connected'
+        ? 'connected'
+        : opts.status === 'manual'
+          ? 'pending'
+          : 'pending',
+    connected_via: 'zernio',
+  }).catch((err) => {
+    console.warn('[onboarding/markPlatformConnection] client_social_accounts mirror failed:', err);
+  });
+
   return updated as OnboardingRow;
+}
+
+/**
+ * Upsert a row into `client_social_accounts`. Safe to call for any
+ * (client_id, platform) combo — unique key forces a single row per pair.
+ * Only writes platforms the table check constraint allows.
+ */
+const ALLOWED_SOCIAL_PLATFORMS = new Set([
+  'instagram', 'tiktok', 'youtube', 'facebook', 'linkedin', 'x',
+]);
+
+export async function upsertClientSocialAccount(opts: {
+  client_id: string;
+  platform: string;
+  handle?: string | null;
+  external_account_id?: string | null;
+  connection_status?: 'pending' | 'connected' | 'disconnected' | 'error';
+  connected_via?: 'zernio' | 'manual' | 'meta_business_suite';
+  metadata?: Record<string, unknown> | null;
+}): Promise<void> {
+  if (!ALLOWED_SOCIAL_PLATFORMS.has(opts.platform)) return;
+  const admin = createAdminClient();
+  const row: Record<string, unknown> = {
+    client_id: opts.client_id,
+    platform: opts.platform,
+    handle: opts.handle ?? null,
+    external_account_id: opts.external_account_id ?? null,
+    connection_status: opts.connection_status ?? 'pending',
+    connected_via: opts.connected_via ?? 'manual',
+    metadata: opts.metadata ?? null,
+    connected_at: opts.connection_status === 'connected' ? new Date().toISOString() : null,
+    updated_at: new Date().toISOString(),
+  };
+  const { error } = await admin
+    .from('client_social_accounts')
+    .upsert(row, { onConflict: 'client_id,platform' });
+  if (error) {
+    throw new Error(`[onboarding/upsertClientSocialAccount] ${error.message}`);
+  }
+}
+
+/* ---------- products ---------------------------------------------------- */
+
+/**
+ * Replace the client's product list with the supplied set. Each entry
+ * becomes one row in `client_products` with source='onboarding_upload'.
+ * Existing rows for the client are removed first so the onboarding submit
+ * is the authoritative state at that moment.
+ */
+export async function replaceClientProductsFromOnboarding(opts: {
+  client_id: string;
+  products: Array<{ title: string; url?: string | null; price_cents?: number | null; currency?: string | null }>;
+}): Promise<void> {
+  const admin = createAdminClient();
+  const { error: delErr } = await admin
+    .from('client_products')
+    .delete()
+    .eq('client_id', opts.client_id)
+    .eq('source', 'onboarding_upload');
+  if (delErr) {
+    throw new Error(`[onboarding/replaceClientProducts] delete failed: ${delErr.message}`);
+  }
+  if (opts.products.length === 0) return;
+  const rows = opts.products.map((p, idx) => ({
+    client_id: opts.client_id,
+    title: p.title,
+    url: p.url ?? null,
+    price_cents: p.price_cents ?? null,
+    currency: p.currency ?? null,
+    source: 'onboarding_upload',
+    position: idx,
+  }));
+  const { error: insErr } = await admin.from('client_products').insert(rows);
+  if (insErr) {
+    throw new Error(`[onboarding/replaceClientProducts] insert failed: ${insErr.message}`);
+  }
 }
 
 /* ---------- team assignments ------------------------------------------- */

@@ -1,10 +1,10 @@
-import { GeneralSettingsForm } from '@/components/clients/settings/general-settings-form';
+import { redirect } from 'next/navigation';
 
-export default async function ClientSettingsGeneralPage({
+export default async function ClientSettingsGeneralRedirect({
   params,
 }: {
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  return <GeneralSettingsForm slug={slug} />;
+  redirect(`/admin/clients/${slug}/profile/identity`);
 }

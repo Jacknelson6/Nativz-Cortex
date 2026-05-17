@@ -1,10 +1,10 @@
-import { ContactsSettingsView } from '@/components/clients/settings/contacts-settings-view';
+import { redirect } from 'next/navigation';
 
-export default async function ClientSettingsContactsPage({
+export default async function ClientSettingsContactsRedirect({
   params,
 }: {
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  return <ContactsSettingsView slug={slug} />;
+  redirect(`/admin/clients/${slug}/profile/users`);
 }

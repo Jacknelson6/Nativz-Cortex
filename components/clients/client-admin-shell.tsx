@@ -3,15 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { LucideIcon } from 'lucide-react';
-import {
-  AlertTriangle,
-  ArrowLeft,
-  Bell,
-  Coins,
-  FileUser,
-  Handshake,
-  Sparkles,
-} from 'lucide-react';
+import { ArrowLeft, Coins, FileUser } from 'lucide-react';
 import {
   ClientAdminShellProvider,
   type ClientAdminShellValue,
@@ -31,32 +23,17 @@ type NavItem = {
   separator?: boolean;
 };
 
-// Consolidated nav — four items mapped to user mental model:
-//   Info         = who the client is        (identity + brand + contacts + integrations)
-//   Partnership  = what we do for them       (services + contract)
-//   Notifications, Archive/delete stay standalone.
-// Onboarding lives under a top-level /admin/onboarding admin tool (not
-// per-client), so it's not in this nav.
+// Top-level per-client nav. Brand profile (identity / users / team /
+// deliverables-config / notifications / integrations / archive) lives
+// inside its own nested rail under /profile/*. This outer nav only holds
+// concerns that sit OUTSIDE the profile surface.
 const NAV: NavItem[] = [
   {
     key: 'profile',
-    label: 'Profile (preview)',
+    label: 'Profile',
     path: '/profile',
-    icon: Sparkles,
-  },
-  {
-    key: 'info',
-    label: 'Info',
-    path: '/settings/info',
-    matches: ['/settings/brand', '/settings/contacts', '/settings/integrations', '/settings/general'],
+    matches: ['/settings'],
     icon: FileUser,
-  },
-  {
-    key: 'partnership',
-    label: 'Partnership',
-    path: '/settings/partnership',
-    matches: ['/settings/access', '/contract'],
-    icon: Handshake,
   },
   {
     key: 'deliverables',
@@ -64,8 +41,6 @@ const NAV: NavItem[] = [
     path: '/deliverables',
     icon: Coins,
   },
-  { key: 'notifications', label: 'Notifications', path: '/settings/notifications', icon: Bell, separator: true },
-  { key: 'danger', label: 'Archive / delete', path: '/settings/danger', icon: AlertTriangle, danger: true, separator: true },
 ];
 
 function hrefFor(slug: string, path: string) {

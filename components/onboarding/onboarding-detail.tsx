@@ -756,7 +756,7 @@ function CompletionPanel(props: {
             <div className="flex items-center gap-2">
               {client ? (
                 <a
-                  href={`/admin/clients/${client.slug}/settings/integrations`}
+                  href={`/admin/clients/${client.slug}/profile/integrations`}
                   className="text-xs text-accent-text hover:underline whitespace-nowrap"
                 >
                   Edit →
@@ -787,7 +787,7 @@ function CompletionPanel(props: {
             <div className="flex items-center gap-2">
               {client ? (
                 <a
-                  href={`/admin/clients/${client.slug}/settings/integrations`}
+                  href={`/admin/clients/${client.slug}/profile/integrations`}
                   className="text-xs text-accent-text hover:underline whitespace-nowrap"
                 >
                   Edit →

@@ -8,5 +8,5 @@ export default async function AdminClientRootRedirectPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  redirect(`/admin/clients/${slug}/settings/info`);
+  redirect(`/admin/clients/${slug}/profile/overview`);
 }

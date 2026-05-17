@@ -290,7 +290,14 @@ export async function PATCH(
           'social_digest_send_day_of_week',
           'social_digest_send_hour',
           'social_digest_send_minute',
+          'drop_reminder_email_enabled',
           'admin_workspace_modules',
+          // Webhook + integration secrets — admin-only edits, stored on the
+          // client row. The integrations page reads + writes these directly.
+          'revision_webhook_url',
+          'chat_webhook_url',
+          'paid_media_webhook_url',
+          'uppromote_api_key',
         ]
       : portalAllowedFields;
 

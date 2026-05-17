@@ -62,6 +62,15 @@ const patchSchema = z.object({
   // 1st of each month for SMM clients. 0 = do not auto-generate.
   monthly_calendar_post_count: z.number().int().min(0).max(1000).optional(),
 
+  // Service plan + posting defaults — what we deliver each month and when.
+  services: z.array(z.string().trim().min(1).max(50)).max(20).optional(),
+  default_posting_time: z
+    .string()
+    .regex(/^\d{2}:\d{2}(:\d{2})?$/)
+    .nullable()
+    .optional(),
+  default_posting_timezone: z.string().trim().max(100).nullable().optional(),
+
   // Account-level default assignees. Auto-fill new editing projects +
   // content drops for this client so the team doesn't have to pick on
   // every creation. Both FK into team_members; null = no default.
@@ -152,8 +161,10 @@ export async function GET(
           'caption_notes',
           'hashtag_notes',
           'cta_notes',
-          // Monthly calendar cron.
+          // Monthly calendar cron + posting defaults.
           'monthly_calendar_post_count',
+          'default_posting_time',
+          'default_posting_timezone',
           // Account-level default assignees.
           'default_strategist_id',
           'default_editor_id',

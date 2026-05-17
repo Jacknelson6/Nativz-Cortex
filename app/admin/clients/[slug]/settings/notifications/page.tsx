@@ -1,10 +1,10 @@
-import { ClientNotificationsSubpage } from '@/components/clients/client-notifications-subpage';
+import { redirect } from 'next/navigation';
 
-export default async function ClientSettingsNotificationsPage({
+export default async function ClientSettingsNotificationsRedirect({
   params,
 }: {
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  return <ClientNotificationsSubpage slug={slug} />;
+  redirect(`/admin/clients/${slug}/profile/notifications`);
 }

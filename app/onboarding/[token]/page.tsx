@@ -30,7 +30,8 @@ interface ClientRow {
   logo_url: string | null;
   website_url: string | null;
   tagline: string | null;
-  products: string | null;
+  /** clients.products is a text[] column. Read but not used for prefill — products live in client_products. */
+  products: string[] | null;
   target_audience: string | null;
   brand_voice: string | null;
   current_offers: string | null;
@@ -78,7 +79,9 @@ export default async function OnboardingClientPage({
 
   const prefill: BrandBasicsPrefill = {
     tagline: clientRow.tagline,
-    what_we_sell: clientRow.products,
+    // Products no longer prefilled here — captured by the dedicated Products
+    // screen, which writes to `client_products` instead of `clients.products`.
+    what_we_sell: null,
     audience: clientRow.target_audience,
     voice: clientRow.brand_voice,
     current_offers: clientRow.current_offers,

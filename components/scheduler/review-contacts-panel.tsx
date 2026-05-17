@@ -61,7 +61,7 @@ export function ReviewContactsPanel({
   }, [clientId]);
 
   const manageHref = brandSlug
-    ? `/admin/clients/${brandSlug}/settings/brand`
+    ? `/admin/clients/${brandSlug}/profile/identity`
     : '/admin/clients';
 
   return (

@@ -143,15 +143,31 @@ export interface FootageAndReferencesState {
   notes?: string;
 }
 
+export interface ProductEntry {
+  /** Mirrored from client_products row id when synced. Undefined for inline drafts. */
+  product_id?: string;
+  title: string;
+  url?: string;
+  price_cents?: number | null;
+  currency?: string | null;
+}
+
+export interface ProductsState {
+  products: ProductEntry[];
+}
+
 /** Full step_state union, kind-discriminated. */
 export interface SmmStepState {
   brand_basics?: BrandBasicsState;
+  products?: ProductsState;
   social_handles?: SocialHandlesState;
   points_of_contact?: PointsOfContactState;
 }
 
 export interface EditingStepState {
   brand_basics?: BrandBasicsState;
+  products?: ProductsState;
+  points_of_contact?: PointsOfContactState;
   footage_and_references?: FootageAndReferencesState;
 }
 

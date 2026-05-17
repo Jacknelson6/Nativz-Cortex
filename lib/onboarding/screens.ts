@@ -32,12 +32,13 @@ export interface OnboardingScreen {
 }
 
 /**
- * SMM = social media management. 5 screens.
+ * SMM = social media management. 6 screens.
  *   0 welcome           -> agency-aware intro
  *   1 points_of_contact -> who's on the client side (mirrors `contacts` table)
- *   2 brand_basics      -> tagline, what/who/voice/offers, prefilled from `clients`
- *   3 social_connect    -> per-platform Zernio OAuth + Meta Business Suite tile
- *   4 done              -> handoff
+ *   2 brand_basics      -> website, logo, voice, offers (mirrors `clients`)
+ *   3 products          -> product list (mirrors `client_products`)
+ *   4 social_connect    -> per-platform Zernio OAuth + Meta Business Suite tile
+ *   5 done              -> handoff
  */
 const SMM_SCREENS: readonly OnboardingScreen[] = [
   {
@@ -56,7 +57,13 @@ const SMM_SCREENS: readonly OnboardingScreen[] = [
     key: 'brand_basics',
     label: 'Brand basics',
     step_state_key: 'brand_basics',
-    description: 'Tagline, what you sell, audience, voice, current offers.',
+    description: 'Website, logo, voice, current offers.',
+  },
+  {
+    key: 'products',
+    label: 'Products',
+    step_state_key: 'products',
+    description: 'What you sell — titles + URLs we should highlight.',
   },
   {
     key: 'social_connect',
@@ -73,11 +80,13 @@ const SMM_SCREENS: readonly OnboardingScreen[] = [
 ] as const;
 
 /**
- * Editing = post-production deliverables. 4 screens.
+ * Editing = post-production deliverables. 6 screens.
  *   0 welcome                  -> partnership framing
- *   1 brand_basics             -> same component as SMM
- *   2 footage_and_references   -> raw footage, reference edits, prior edits, offers, notes
- *   3 done                     -> 7-step cadence + ops email books kickoff
+ *   1 points_of_contact        -> who on the client side approves cuts (mirrors `contacts`)
+ *   2 brand_basics             -> website, logo, voice, offers
+ *   3 products                 -> what we're editing for (mirrors `client_products`)
+ *   4 footage_and_references   -> raw footage, reference edits, free-form notes
+ *   5 done                     -> 7-step cadence + ops email books kickoff
  */
 const EDITING_SCREENS: readonly OnboardingScreen[] = [
   {
@@ -87,10 +96,22 @@ const EDITING_SCREENS: readonly OnboardingScreen[] = [
     description: 'Partnership framing for the editing relationship.',
   },
   {
+    key: 'points_of_contact',
+    label: 'Points of contact',
+    step_state_key: 'points_of_contact',
+    description: 'Who on your team approves and gives notes.',
+  },
+  {
     key: 'brand_basics',
     label: 'Brand basics',
     step_state_key: 'brand_basics',
-    description: 'Tagline, what you sell, audience, voice, current offers.',
+    description: 'Website, logo, voice, current offers.',
+  },
+  {
+    key: 'products',
+    label: 'Products',
+    step_state_key: 'products',
+    description: 'What you sell — titles + URLs we should reference in edits.',
   },
   {
     key: 'footage_and_references',

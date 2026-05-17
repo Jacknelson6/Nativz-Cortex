@@ -12,16 +12,22 @@ export function WorkspaceSection({
   description,
   openHref,
   openLabel = 'Open',
+  action,
+  anchor,
   children,
 }: {
   title: string;
   description?: string;
   openHref?: string;
   openLabel?: string;
+  /** Right-aligned slot, typically a SectionEditor button. */
+  action?: React.ReactNode;
+  /** Optional anchor target so deep links from overview jump to this section. */
+  anchor?: string;
   children: React.ReactNode;
 }) {
   return (
-    <section className="space-y-3">
+    <section className="space-y-3" id={anchor}>
       <header className="flex items-end justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-sm font-semibold text-text-primary leading-tight">{title}</h2>
@@ -29,15 +35,18 @@ export function WorkspaceSection({
             <p className="text-xs text-text-muted mt-1 leading-relaxed">{description}</p>
           )}
         </div>
-        {openHref && (
-          <Link
-            href={openHref}
-            className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-text-primary transition-colors shrink-0"
-          >
-            {openLabel}
-            <ArrowUpRight size={12} />
-          </Link>
-        )}
+        <div className="flex items-center gap-2 shrink-0">
+          {openHref && (
+            <Link
+              href={openHref}
+              className="inline-flex items-center gap-1 text-xs text-text-muted hover:text-text-primary transition-colors"
+            >
+              {openLabel}
+              <ArrowUpRight size={12} />
+            </Link>
+          )}
+          {action}
+        </div>
       </header>
       <div className="rounded-xl border border-nativz-border bg-surface overflow-hidden">
         {children}
