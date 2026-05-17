@@ -4,6 +4,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isAdmin } from '@/lib/auth/permissions';
 import type { EditingProject } from '@/lib/editing/types';
+import { toFirstOfMonth, currentMonth } from '@/lib/content-projects/month-utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,6 +28,21 @@ const ListQuery = z.object({
   status: z
     .enum(['editing', 'need_approval', 'revising', 'approved', 'done', 'archived'])
     .optional(),
+  phase: z
+    .enum([
+      'Planning',
+      'Shoot booked',
+      'Shoot done',
+      'Raw uploaded',
+      'Editing',
+      'Client review',
+      'Approved',
+      'Publishing',
+      'Done',
+    ])
+    .optional(),
+  /** `YYYY-MM-01` content_month filter. Use the literal `unscheduled` for null. */
+  contentMonth: z.string().optional(),
   clientId: z.string().uuid().optional(),
   include: z.enum(['archived']).optional(),
 });
@@ -37,6 +53,11 @@ const CreateBody = z.object({
   project_type: z.enum(['editing', 'calendar']).default('editing'),
   drive_folder_url: z.string().url().optional(),
   notes: z.string().max(2000).optional(),
+  /** YYYY-MM-DD (1st of month). Defaults to current month server-side. */
+  content_month: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
 });
 
 export async function GET(req: Request) {
@@ -57,7 +78,8 @@ export async function GET(req: Request) {
   let query = admin
     .from('editing_projects')
     .select(
-      `id, client_id, name, project_type, status, editor_id,
+      `id, client_id, name, project_type, status, phase, content_month,
+       raws_uploaded_at, editor_id,
        videographer_id, strategist_id, project_brief, shoot_date,
        drive_folder_url, notes,
        drop_id, created_by, created_at, updated_at, ready_at, approved_at,
@@ -74,6 +96,16 @@ export async function GET(req: Request) {
     query = query.eq('status', parsed.data.status);
   } else if (parsed.data.include !== 'archived') {
     query = query.neq('status', 'archived');
+  }
+  if (parsed.data.phase) {
+    query = query.eq('phase', parsed.data.phase);
+  }
+  if (parsed.data.contentMonth) {
+    if (parsed.data.contentMonth === 'unscheduled') {
+      query = query.is('content_month', null);
+    } else {
+      query = query.eq('content_month', parsed.data.contentMonth);
+    }
   }
   if (parsed.data.clientId) {
     query = query.eq('client_id', parsed.data.clientId);
@@ -263,6 +295,7 @@ export async function GET(req: Request) {
     dedupedVideoCount.set(pid, vids.length);
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const projects: EditingProject[] = (data ?? []).map((row: any) => ({
     id: row.id,
     client_id: row.client_id,
@@ -272,6 +305,9 @@ export async function GET(req: Request) {
     name: row.name,
     project_type: row.project_type,
     status: row.status,
+    phase: row.phase ?? 'Planning',
+    content_month: row.content_month ?? null,
+    raws_uploaded_at: row.raws_uploaded_at ?? null,
     editor_id: row.editor_id,
     editor_email: row.editor?.email ?? null,
     editor_name: row.editor?.full_name ?? null,
@@ -354,6 +390,11 @@ export async function POST(req: Request) {
   const editorId = clientDefaults?.default_editor_id ?? creatorTeamId;
   const strategistId = clientDefaults?.default_strategist_id ?? null;
 
+  // Normalise to first-of-month; default to current month if omitted so
+  // the new content-month sorter always has a bucket to drop the row in.
+  const contentMonth =
+    toFirstOfMonth(parsed.data.content_month ?? null) ?? currentMonth();
+
   const { data, error } = await admin
     .from('editing_projects')
     .insert({
@@ -365,6 +406,9 @@ export async function POST(req: Request) {
       created_by: user.id,
       editor_id: editorId,
       strategist_id: strategistId,
+      content_month: contentMonth,
+      // phase defaults to 'Planning' via the DB DEFAULT; explicit for clarity.
+      phase: 'Planning',
     })
     .select('id')
     .single();

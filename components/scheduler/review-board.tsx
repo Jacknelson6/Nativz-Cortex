@@ -187,6 +187,29 @@ export interface ReviewLinkRow {
     | 'done'
     | 'archived'
     | null;
+  /**
+   * Orthogonal lifecycle column added in migration 322. Drives the
+   * admin Content Tools UI (Phase column + filter chip). Only
+   * meaningful for `kind === 'editing'` rows; calendar rows leave it
+   * null so the column renders a dim placeholder.
+   */
+  phase?:
+    | 'Planning'
+    | 'Shoot booked'
+    | 'Shoot done'
+    | 'Raw uploaded'
+    | 'Editing'
+    | 'Client review'
+    | 'Approved'
+    | 'Publishing'
+    | 'Done'
+    | null;
+  /**
+   * First-of-month bucket the project belongs to. Calendar rows fall
+   * back to `drop_start` month or `created_at` month so the list
+   * grouping still has a key to bucket by.
+   */
+  content_month?: string | null;
 }
 
 interface ReviewBoardProps {

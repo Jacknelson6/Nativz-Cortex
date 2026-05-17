@@ -25,6 +25,35 @@ export type EditingProjectStatus =
   | 'done'
   | 'archived';
 
+/**
+ * Orthogonal lifecycle column added in migration 322. Drives the admin
+ * Content Tools list (sort / filter / group) and the project slide-over
+ * state machine. Independent of `status`, which carries legacy semantics
+ * and is being phased out in favour of `phase`.
+ */
+export type EditingProjectPhase =
+  | 'Planning'
+  | 'Shoot booked'
+  | 'Shoot done'
+  | 'Raw uploaded'
+  | 'Editing'
+  | 'Client review'
+  | 'Approved'
+  | 'Publishing'
+  | 'Done';
+
+export const EDITING_PHASES: readonly EditingProjectPhase[] = [
+  'Planning',
+  'Shoot booked',
+  'Shoot done',
+  'Raw uploaded',
+  'Editing',
+  'Client review',
+  'Approved',
+  'Publishing',
+  'Done',
+] as const;
+
 export interface EditingProjectVideo {
   id: string;
   project_id: string;
@@ -92,6 +121,20 @@ export interface EditingProject {
   name: string;
   project_type: EditingProjectType;
   status: EditingProjectStatus;
+  /**
+   * Source of truth for the new admin Content Tools UI (sort + filter +
+   * group). Added in migration 322. Advances on explicit admin action
+   * via the phase state machine in `lib/content-projects/phase-state-machine.ts`.
+   */
+  phase: EditingProjectPhase;
+  /**
+   * First-of-month date this project belongs to. Set explicitly at
+   * creation, immutable thereafter. Drives the month grouping on the
+   * Content Tools list page.
+   */
+  content_month: string | null;
+  /** Stamped on the first "Raws uploaded" click. */
+  raws_uploaded_at: string | null;
   editor_id: string | null;
   editor_email: string | null;
   editor_name: string | null;
@@ -179,4 +222,16 @@ export const EDITING_STATUS_LABEL: Record<EditingProjectStatus, string> = {
 export const EDITING_TYPE_LABEL: Record<EditingProjectType, string> = {
   editing: 'Editing',
   calendar: 'Calendar',
+};
+
+export const PHASE_TONE: Record<EditingProjectPhase, 'neutral' | 'amber' | 'blue' | 'emerald' | 'slate'> = {
+  Planning: 'slate',
+  'Shoot booked': 'amber',
+  'Shoot done': 'amber',
+  'Raw uploaded': 'amber',
+  Editing: 'blue',
+  'Client review': 'blue',
+  Approved: 'emerald',
+  Publishing: 'emerald',
+  Done: 'neutral',
 };

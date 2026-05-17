@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
   BadgeDollarSign,
-  Bell,
   Cable,
   ChevronLeft,
   ChevronRight,
@@ -44,7 +43,6 @@ import { ProjectsEmptyState } from './projects-empty-state';
 import { ProjectsTableSkeleton } from './projects-table-skeleton';
 import { QuickScheduleTab } from './quick-schedule-tab';
 import { ConnectionsTab } from './connections-tab';
-import { NotificationsTab } from './notifications-tab';
 import { PostingHistoryTab } from './posting-history-tab';
 import { EditingNewProjectDialog } from './editing-new-project-dialog';
 import { EditingProjectDetail } from './editing-project-detail';
@@ -165,10 +163,22 @@ function defaultPromoteRange(): ScheduleRange {
   return { start: fmt(start), end: fmt(end) };
 }
 
-/** Full-month key, `YYYY-MM`. Used by `default` (created_at) grouping. */
-function monthKey(iso: string | null | undefined): string | null {
-  if (!iso) return null;
-  const d = new Date(iso);
+/**
+ * Full-month key, `YYYY-MM`. Used by `default` grouping. Prefers the
+ * project's explicit `content_month` (set at creation; the editorial
+ * "this is the May calendar" assignment) and falls back to the raw
+ * created_at timestamp for legacy rows that pre-date migration 322.
+ */
+function monthKey(
+  contentMonth: string | null | undefined,
+  fallbackIso: string | null | undefined,
+): string | null {
+  if (contentMonth) {
+    // content_month is always stored as YYYY-MM-01; slice the prefix.
+    return contentMonth.slice(0, 7);
+  }
+  if (!fallbackIso) return null;
+  const d = new Date(fallbackIso);
   if (Number.isNaN(d.getTime())) return null;
   const y = d.getUTCFullYear();
   const m = String(d.getUTCMonth() + 1).padStart(2, '0');
@@ -250,7 +260,7 @@ function groupRowsByMonth(
     const key =
       mode === 'approval'
         ? halfMonthKey(row.approved_at ?? null)
-        : monthKey(row.created_at);
+        : monthKey(row.content_month ?? null, row.created_at);
     const existing = buckets.get(key);
     if (existing) existing.push(row);
     else buckets.set(key, [row]);
@@ -290,8 +300,6 @@ function groupRowsByMonth(
  *   Connections     - integration health (Drive / Monday / Resend /
  *                     Zernio / Supabase / OpenRouter / Anthropic /
  *                     Nango). Connected vs. missing at a glance.
- *   Notifications   - POC contacts panel + recent transactional email
- *                     activity feed. The "what just went out" view.
  *
  * Every project tab feeds the same `<ReviewTableCard>` primitive with
  * a different filter + column visibility set. Type-specific tabs hide
@@ -300,10 +308,10 @@ function groupRowsByMonth(
  * `/api/calendar/review` and slice it locally so cross-tab navigation
  * is instant.
  *
- * Other tabs (Quick schedule / Connections / Notifications) are
- * independent panes - no cross-coupled state, no shared fetches. Each
- * pane handles its own loading + error rendering so a Connections
- * probe failure can't block the Projects table from rendering.
+ * Other tabs (Quick schedule / Connections) are independent panes -
+ * no cross-coupled state, no shared fetches. Each pane handles its own
+ * loading + error rendering so a Connections probe failure can't block
+ * the Projects table from rendering.
  */
 
 type ProjectTabSlug =
@@ -315,8 +323,7 @@ type ContentToolsTab =
   | ProjectTabSlug
   | 'quick-schedule'
   | 'history'
-  | 'connections'
-  | 'notifications';
+  | 'connections';
 
 /**
  * Maps each project-type tab to the underlying `ReviewProjectType`
@@ -329,8 +336,12 @@ const PROJECT_TAB_FILTER: Record<ProjectTabSlug, ReviewProjectType | null> = {
 };
 
 const PROJECT_TAB_HIDE: Record<ProjectTabSlug, ReviewHideableColumn[]> = {
+  // Calendar rows don't carry a phase (the 9-state machine is editing-
+  // only), so we hide the column on the Calendar tab to avoid a wall of
+  // dashes. On the cross-tab All projects view we keep it so editing
+  // rows still surface their phase.
   projects: [],
-  calendar: ['project_type'],
+  calendar: ['project_type', 'phase'],
   editing: ['project_type'],
 };
 
@@ -459,6 +470,12 @@ function editingProjectToRow(p: EditingProject): ReviewLinkRow {
     editor_id: p.editor_id,
     editor_email: p.editor_email,
     editor_name: p.editor_name,
+    // Phase + content_month feed the new Phase column and the
+    // content_month-driven grouping replacing the old created_at month
+    // bucket. Calendar rows leave both undefined (the cell falls back
+    // to a placeholder).
+    phase: p.phase,
+    content_month: p.content_month,
   };
 }
 
@@ -496,11 +513,6 @@ const TABS: {
     slug: 'connections',
     label: 'Connections',
     icon: <Cable className="size-3.5" />,
-  },
-  {
-    slug: 'notifications',
-    label: 'Notifications',
-    icon: <Bell className="size-3.5" />,
   },
 ];
 
@@ -688,6 +700,9 @@ export function ContentToolsShell() {
     return groups.map((g) => ({
       ...g,
       rows: [...g.rows].sort((a, b) => {
+        // In approval mode rows order by approved_at; in default mode
+        // we sort by created_at within the month so the "started most
+        // recently" project lands at the top of its bucket.
         const aIso = groupBy === 'approval' ? a.approved_at ?? '' : a.created_at;
         const bIso = groupBy === 'approval' ? b.approved_at ?? '' : b.created_at;
         return bIso.localeCompare(aIso);
@@ -1025,7 +1040,6 @@ export function ContentToolsShell() {
         {tab === 'quick-schedule' && <QuickScheduleTab />}
         {tab === 'history' && <PostingHistoryTab />}
         {tab === 'connections' && <ConnectionsTab />}
-        {tab === 'notifications' && <NotificationsTab />}
 
         {/*
           Editing-project dialogs live at the shell root so they can be
@@ -1165,8 +1179,6 @@ function describeSubtitle(tab: ContentToolsTab, filteredCount: number): string {
       return 'Every publish attempt across every brand, succeeded or failed';
     case 'connections':
       return 'Every integration the content pipeline depends on';
-    case 'notifications':
-      return 'Review POCs and the transactional email feed';
   }
 }
 

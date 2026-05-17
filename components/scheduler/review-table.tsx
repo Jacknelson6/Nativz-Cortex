@@ -179,6 +179,7 @@ export type SortField =
   | 'date_sent'
   | 'approved_date'
   | 'status'
+  | 'phase'
   | 'project_type'
   | 'creatives'
   | 'last_followup';
@@ -353,6 +354,7 @@ export type ReviewHideableColumn =
   | 'date_sent'
   | 'approved_date'
   | 'status'
+  | 'phase'
   | 'project_type'
   | 'creatives'
   | 'last_followup';
@@ -421,6 +423,7 @@ export function ReviewTableCard({
   const showDateSent = !hidden.has('date_sent');
   const showApprovedDate = !hidden.has('approved_date');
   const showStatus = !hidden.has('status');
+  const showPhase = !hidden.has('phase');
   const showProjectType = !hidden.has('project_type');
   const showCreatives = !hidden.has('creatives');
   const showLastFollowup = !hidden.has('last_followup');
@@ -432,6 +435,7 @@ export function ReviewTableCard({
     (showDateSent ? 1 : 0) +
     (showApprovedDate ? 1 : 0) +
     (showStatus ? 1 : 0) +
+    (showPhase ? 1 : 0) +
     (showProjectType ? 1 : 0) +
     (showCreatives ? 1 : 0) +
     (showLastFollowup ? 1 : 0);
@@ -531,6 +535,18 @@ export function ReviewTableCard({
               </SortableHeader>
             </TableHead>
           )}
+          {showPhase && (
+            <TableHead className="whitespace-nowrap px-2.5 text-center">
+              <SortableHeader
+                field="phase"
+                sort={sort}
+                align="center"
+                onSortChange={sortable ? () => handleSort('phase') : undefined}
+              >
+                Phase
+              </SortableHeader>
+            </TableHead>
+          )}
           {showProjectType && (
             <TableHead className="whitespace-nowrap px-2.5 text-center">
               <SortableHeader
@@ -579,6 +595,7 @@ export function ReviewTableCard({
             showDateSent={showDateSent}
             showApprovedDate={showApprovedDate}
             showStatus={showStatus}
+            showPhase={showPhase}
             showProjectType={showProjectType}
             showCreatives={showCreatives}
             showLastFollowup={showLastFollowup}
@@ -604,6 +621,7 @@ interface ReviewTableRowProps {
   showDateSent?: boolean;
   showApprovedDate?: boolean;
   showStatus?: boolean;
+  showPhase?: boolean;
   showProjectType?: boolean;
   showCreatives?: boolean;
   showLastFollowup?: boolean;
@@ -632,6 +650,7 @@ function ReviewTableRow({
   showDateSent = true,
   showApprovedDate = false,
   showStatus = true,
+  showPhase = true,
   showProjectType = true,
   showCreatives = true,
   showLastFollowup = true,
@@ -711,6 +730,13 @@ function ReviewTableRow({
       {showStatus && (
         <TableCell className="whitespace-nowrap px-2.5 text-center">
           <StatusPill link={link} />
+        </TableCell>
+      )}
+      {showPhase && (
+        <TableCell className="whitespace-nowrap px-2.5 text-center">
+          <div className="flex justify-center">
+            <PhasePill phase={link.phase ?? null} />
+          </div>
         </TableCell>
       )}
       {showProjectType && (
@@ -1243,6 +1269,46 @@ function StatusPill({ link }: { link: ReviewLinkRow }) {
 }
 
 /**
+ * Compact phase pill. Calendar rows (no phase) render an em-dash
+ * placeholder so the column doesn't visually collapse on cross-tab
+ * views. Tones come from `PHASE_TONE` in `lib/editing/types.ts` so the
+ * vocabulary lives in one place.
+ */
+const PHASE_PILL_TONE: Record<string, string> = {
+  slate: 'border-text-muted/30 bg-text-muted/10 text-text-secondary',
+  amber: 'border-status-warning/30 bg-status-warning/10 text-status-warning',
+  blue: 'border-accent-text/30 bg-accent-text/10 text-accent-text',
+  emerald: 'border-status-success/30 bg-status-success/10 text-status-success',
+  neutral: 'border-nativz-border bg-surface text-text-muted',
+};
+
+function PhasePill({ phase }: { phase: ReviewLinkRow['phase'] }) {
+  if (!phase) return <span className="text-sm text-text-muted">-</span>;
+  // Local copy of the tone map to avoid a circular import (the table is
+  // imported by the editing types' dependents). Keys MUST match
+  // `PHASE_TONE` in `lib/editing/types.ts`.
+  const PHASE_TONE_LOCAL: Record<string, keyof typeof PHASE_PILL_TONE> = {
+    Planning: 'slate',
+    'Shoot booked': 'amber',
+    'Shoot done': 'amber',
+    'Raw uploaded': 'amber',
+    Editing: 'blue',
+    'Client review': 'blue',
+    Approved: 'emerald',
+    Publishing: 'emerald',
+    Done: 'neutral',
+  };
+  const toneKey = PHASE_TONE_LOCAL[phase] ?? 'slate';
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${PHASE_PILL_TONE[toneKey]}`}
+    >
+      {phase}
+    </span>
+  );
+}
+
+/**
  * Clickable column-header label. Renders the column name plus a small
  * directional arrow (or a neutral up/down indicator when the column
  * isn't the active sort axis). The whole header turns into a button
@@ -1405,6 +1471,23 @@ const STATUS_RANK: Record<StatusKey, number> = {
 };
 
 /**
+ * Phase ordering for the click-to-sort axis. Mirrors the order of the
+ * pipeline so asc sorts upstream-to-downstream and desc reads "what's
+ * shipping next" at the top. Calendar rows (no phase) sink last.
+ */
+const PHASE_RANK: Record<string, number> = {
+  Planning: 0,
+  'Shoot booked': 1,
+  'Shoot done': 2,
+  'Raw uploaded': 3,
+  Editing: 4,
+  'Client review': 5,
+  Approved: 6,
+  Publishing: 7,
+  Done: 8,
+};
+
+/**
  * Column-aware comparator. Used by `ReviewTableCard` when the parent
  * passes a `sort: SortState`. Each branch falls back to date_sent on a
  * tie so the row order stays deterministic and the user doesn't see
@@ -1483,6 +1566,11 @@ export function sortLinksBy(
       }
       case 'status':
         return STATUS_RANK[a.status] - STATUS_RANK[b.status];
+      case 'phase': {
+        const aR = a.phase ? PHASE_RANK[a.phase] ?? 99 : 99;
+        const bR = b.phase ? PHASE_RANK[b.phase] ?? 99 : 99;
+        return aR - bR;
+      }
       case 'project_type': {
         const av = projectTypeLabel(a).toLowerCase();
         const bv = projectTypeLabel(b).toLowerCase();

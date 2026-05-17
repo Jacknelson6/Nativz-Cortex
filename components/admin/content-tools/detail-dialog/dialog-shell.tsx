@@ -22,9 +22,10 @@ import { ClientLogo } from '@/components/clients/client-logo';
  *   - `children`     : details-tab body, a stack of `<Section>` blocks.
  *
  * Locked-in styles, do not parameterize without a reason: the dialog
- * sits at `2xl` width, the body at `max-h-[80vh] min-h-[640px]` so
- * flipping Details ↔ History never shrinks the card. Header padding is
- * `pl-6 pr-14` to keep the title clear of the close button on the right.
+ * docks to the right edge as a slide-over (`placement="right"`) at `2xl`
+ * width. The body fills the viewport height so flipping Details ↔
+ * History never shrinks the card. Header padding is `pl-6 pr-14` to keep
+ * the title clear of the close button on the right.
  */
 
 export type DetailTab = 'details' | 'calendar' | 'media' | 'history';
@@ -101,8 +102,15 @@ export function ContentDetailDialog({
   children: ReactNode;
 }) {
   return (
-    <Dialog open={open} onClose={onClose} title="" maxWidth="2xl" bodyClassName="p-0">
-      <div className="flex h-full max-h-[80vh] min-h-[640px] flex-col">
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title=""
+      maxWidth="2xl"
+      placement="right"
+      bodyClassName="p-0"
+    >
+      <div className="flex h-full max-h-screen min-h-screen flex-col">
         {/* Header */}
         <div className="flex items-start gap-3 border-b border-nativz-border py-4 pl-6 pr-14">
           <ClientLogo src={logoUrl} name={brandName} size="md" />
