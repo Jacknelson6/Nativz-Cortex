@@ -113,7 +113,7 @@ export default async function ProfileUsersPage({
         eyebrow="Brand profile"
         icon={UsersIcon}
         title="Users"
-        subtitle="Everyone we talk to about this brand. Send, resend, or revoke portal invites inline."
+        subtitle="Everyone we talk to about this brand."
       />
 
       <ProfileUsersTable

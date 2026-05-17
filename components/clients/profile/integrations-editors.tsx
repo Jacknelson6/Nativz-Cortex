@@ -64,7 +64,7 @@ function IntegrationRow({
 }: {
   icon: LucideIcon;
   title: string;
-  subtitle: ReactNode;
+  subtitle?: ReactNode;
   status?: RowStatus;
   primaryLabel?: string;
   onPrimary?: () => void;
@@ -88,9 +88,11 @@ function IntegrationRow({
             </span>
           )}
         </div>
-        <div className="mt-0.5 truncate text-[12px] text-text-muted leading-relaxed">
-          {subtitle}
-        </div>
+        {subtitle && (
+          <div className="mt-0.5 truncate text-[12px] text-text-muted leading-relaxed">
+            {subtitle}
+          </div>
+        )}
       </div>
       <div className="flex shrink-0 items-center gap-1">
         {primaryLabel && onPrimary && (
@@ -517,9 +519,10 @@ function SocialAccountRow({
 
   const initialHandle = (initial?.handle ?? '').replace(/^@+/, '');
   const isConnected = Boolean(initial?.handle) && initial?.connection_status === 'connected';
-  const status: RowStatus =
-    initial?.connection_status ??
-    (initial?.handle ? 'connected' : 'idle');
+  const hasAnyHandle = Boolean(initial?.handle);
+  const status: RowStatus | undefined = hasAnyHandle
+    ? initial?.connection_status ?? 'connected'
+    : undefined;
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [handle, setHandle] = useState(initialHandle);
@@ -597,11 +600,11 @@ function SocialAccountRow({
     }
   }
 
-  const subtitle = isConnected
+  const subtitle: ReactNode = isConnected
     ? <span className="font-mono text-text-secondary">@{baselineRef.current}</span>
     : initial?.handle
     ? <>Saved as <span className="font-mono">@{baselineRef.current}</span>, awaiting verification</>
-    : 'Not connected';
+    : undefined;
 
   return (
     <>

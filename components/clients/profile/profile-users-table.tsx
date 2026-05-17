@@ -575,9 +575,7 @@ function UserRow({
 
   const lastActive = portalUser?.last_login
     ? `Last active ${formatRelativeTime(portalUser.last_login)}`
-    : state === 'invited'
-      ? 'Invite sent'
-      : null;
+    : null;
 
   const menuItems = useMemo(() => {
     const items: { label: string; onClick: () => void; destructive?: boolean }[] = [];
@@ -619,8 +617,11 @@ function UserRow({
     onDelete,
   ]);
 
+  const titleText = row.displayName || row.displayEmail || 'Unnamed';
   const subtitleBits: React.ReactNode[] = [];
-  if (row.displayEmail) subtitleBits.push(<span key="email">{row.displayEmail}</span>);
+  if (row.displayEmail && row.displayEmail !== titleText) {
+    subtitleBits.push(<span key="email">{row.displayEmail}</span>);
+  }
   if (contact?.project_role) subtitleBits.push(<span key="role">{contact.project_role}</span>);
   if (lastActive) subtitleBits.push(<span key="last">{lastActive}</span>);
 
@@ -641,7 +642,7 @@ function UserRow({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <h3 className="truncate text-[13px] font-semibold text-text-primary leading-tight">
-            {row.displayName || row.displayEmail || 'Unnamed'}
+            {titleText}
           </h3>
           {contact?.is_primary && (
             <span title="Primary contact" className="text-amber-300 shrink-0">
@@ -653,18 +654,20 @@ function UserRow({
             {STATE_LABEL[state]}
           </span>
         </div>
-        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] text-text-muted leading-relaxed">
-          {subtitleBits.length > 0 ? (
-            subtitleBits.map((bit, i) => (
-              <span key={i} className="inline-flex items-center gap-2">
-                {i > 0 && <span className="text-nativz-border">·</span>}
-                {bit}
-              </span>
-            ))
-          ) : (
-            <span>No email on file</span>
-          )}
-        </div>
+        {(subtitleBits.length > 0 || !row.displayEmail) && (
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] text-text-muted leading-relaxed">
+            {subtitleBits.length > 0 ? (
+              subtitleBits.map((bit, i) => (
+                <span key={i} className="inline-flex items-center gap-2">
+                  {i > 0 && <span className="text-nativz-border">·</span>}
+                  {bit}
+                </span>
+              ))
+            ) : (
+              <span>No email on file</span>
+            )}
+          </div>
+        )}
       </div>
       <div className="flex shrink-0 items-center gap-1">
         {anyBusy ? (
