@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { SectionEditor, EditorField } from './section-editor';
+import { InlineSection, EditorField } from './section-editor';
 
 type TeamDraft = {
   default_strategist_id: string | null;
@@ -22,7 +22,7 @@ export function TeamEditor({
   initial: TeamDraft;
 }) {
   return (
-    <SectionEditor<TeamDraft>
+    <InlineSection<TeamDraft>
       title="Assigned team"
       description="Auto-fills on every new editing project + calendar drop so nothing ships unassigned."
       initial={initial}
@@ -33,7 +33,7 @@ export function TeamEditor({
       })}
     >
       {(d, set) => <RosterFields draft={d} set={set} />}
-    </SectionEditor>
+    </InlineSection>
   );
 }
 

@@ -1,26 +1,11 @@
 import { notFound } from 'next/navigation';
-import {
-  Plug,
-  Instagram,
-  Music2,
-  Youtube,
-  Facebook,
-  Linkedin,
-  Twitter,
-  Webhook,
-  Megaphone,
-} from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
+import { Plug } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { SettingsPageHeader } from '@/components/clients/settings/settings-primitives';
 import {
-  WorkspaceSection,
-  WorkspaceRow,
-} from '@/components/clients/profile/workspace-section';
-import {
   WebhooksEditor,
   UpPromoteEditor,
-  SocialAccountEditor,
+  SocialAccountsEditor,
 } from '@/components/clients/profile/integrations-editors';
 
 export const dynamic = 'force-dynamic';
@@ -35,66 +20,14 @@ type ClientRow = {
 
 type ConnectionStatus = 'pending' | 'connected' | 'disconnected' | 'error';
 
-type SocialAccount = {
+type SocialRow = {
   platform: string;
   handle: string | null;
   connection_status: ConnectionStatus | null;
   connected_via: string | null;
-  connected_at: string | null;
 };
 
-const PLATFORM_META: Record<string, { label: string; icon: LucideIcon }> = {
-  instagram: { label: 'Instagram', icon: Instagram },
-  tiktok: { label: 'TikTok', icon: Music2 },
-  youtube: { label: 'YouTube', icon: Youtube },
-  facebook: { label: 'Facebook', icon: Facebook },
-  linkedin: { label: 'LinkedIn', icon: Linkedin },
-  x: { label: 'X', icon: Twitter },
-};
-
-function connectedHint(account: SocialAccount | undefined): string | undefined {
-  if (!account || !account.handle) return 'Not connected';
-  const parts: string[] = [`@${account.handle}`];
-  if (account.connected_via) parts.push(`via ${account.connected_via}`);
-  if (account.connected_at) {
-    const ts = new Date(account.connected_at).getTime();
-    if (!Number.isNaN(ts)) {
-      const diff = Date.now() - ts;
-      const day = 24 * 60 * 60 * 1000;
-      if (diff < 60 * 1000) parts.push('just now');
-      else if (diff < 60 * 60 * 1000) parts.push(`${Math.floor(diff / (60 * 1000))}m ago`);
-      else if (diff < day) parts.push(`${Math.floor(diff / (60 * 60 * 1000))}h ago`);
-      else if (diff < 7 * day) parts.push(`${Math.floor(diff / day)}d ago`);
-      else parts.push(new Date(account.connected_at).toLocaleDateString());
-    }
-  }
-  return parts.join(' · ');
-}
-
-function StatusPill({ status }: { status: SocialAccount['connection_status'] | null }) {
-  if (status === 'connected') {
-    return (
-      <span className="shrink-0 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
-        Connected
-      </span>
-    );
-  }
-  if (status === 'pending') {
-    return (
-      <span className="shrink-0 rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] font-medium text-amber-300">
-        Pending
-      </span>
-    );
-  }
-  if (status === 'error') {
-    return (
-      <span className="shrink-0 rounded-full border border-red-400/30 bg-red-500/10 px-2 py-0.5 text-[10px] font-medium text-red-300">
-        Error
-      </span>
-    );
-  }
-  return null;
-}
+const PLATFORMS = ['instagram', 'tiktok', 'youtube', 'facebook', 'linkedin', 'x'];
 
 function maskKey(value: string | null): string | null {
   if (!value) return null;
@@ -121,13 +54,13 @@ export default async function ProfileIntegrationsPage({
 
   const { data: socialRows } = await admin
     .from('client_social_accounts')
-    .select('platform, handle, connection_status, connected_via, connected_at')
+    .select('platform, handle, connection_status, connected_via')
     .eq('client_id', client.id);
-  const socialAccounts: SocialAccount[] = socialRows ?? [];
 
-  const accountsByPlatform = new Map<string, SocialAccount>(
-    socialAccounts.map((a) => [a.platform, a]),
-  );
+  const initialSocial: Record<string, SocialRow> = {};
+  for (const row of (socialRows ?? []) as SocialRow[]) {
+    initialSocial[row.platform] = row;
+  }
 
   const upPromoteConnected = Boolean(client.uppromote_api_key);
 
@@ -136,97 +69,29 @@ export default async function ProfileIntegrationsPage({
       <SettingsPageHeader
         icon={Plug}
         title="Integrations"
-        subtitle="Where Cortex pulls data from and pushes events to. Connect during onboarding, manage here."
+        subtitle="Where Cortex pulls data from and pushes events to. Edit inline, save per section."
       />
 
-      <WorkspaceSection
-        title="Social accounts"
-        description="Connected social handles. Used for posting, analytics, and the weekly social digest."
-      >
-        {Object.entries(PLATFORM_META).map(([key, meta]) => {
-          const account = accountsByPlatform.get(key);
-          return (
-            <WorkspaceRow
-              key={key}
-              icon={meta.icon}
-              label={meta.label}
-              hint={connectedHint(account)}
-              rightSlot={
-                <>
-                  <StatusPill status={account?.connection_status ?? null} />
-                  <SocialAccountEditor
-                    clientId={client.id}
-                    platform={key}
-                    platformLabel={meta.label}
-                    initial={{
-                      handle: account?.handle ?? null,
-                      connection_status: account?.connection_status ?? null,
-                      connected_via: account?.connected_via ?? null,
-                    }}
-                  />
-                </>
-              }
-            />
-          );
-        })}
-      </WorkspaceSection>
+      <SocialAccountsEditor
+        clientId={client.id}
+        initial={initialSocial}
+        platforms={PLATFORMS}
+      />
 
-      <WorkspaceSection
-        title="Affiliate program"
-        description="UpPromote pulls earnings + new affiliate sign-ups for the weekly digest."
-        action={<UpPromoteEditor clientId={client.id} connected={upPromoteConnected} />}
-      >
-        <WorkspaceRow
-          icon={Megaphone}
-          label="UpPromote"
-          hint={
-            upPromoteConnected
-              ? `${maskKey(client.uppromote_api_key)} · pulls affiliate data nightly`
-              : 'Not connected'
-          }
-          rightSlot={
-            upPromoteConnected ? (
-              <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
-                Connected
-              </span>
-            ) : null
-          }
-        />
-      </WorkspaceSection>
+      <UpPromoteEditor
+        clientId={client.id}
+        connected={upPromoteConnected}
+        maskedKey={maskKey(client.uppromote_api_key)}
+      />
 
-      <WorkspaceSection
-        title="Webhooks"
-        description="Where Cortex pushes events. Admin-only — clients never see these."
-        action={
-          <WebhooksEditor
-            clientId={client.id}
-            initial={{
-              chat_webhook_url: client.chat_webhook_url ?? '',
-              revision_webhook_url: client.revision_webhook_url ?? '',
-              paid_media_webhook_url: client.paid_media_webhook_url ?? '',
-            }}
-          />
-        }
-      >
-        <WorkspaceRow
-          icon={Webhook}
-          label="Chat"
-          hint="Fires on every approval comment + new drop"
-          value={client.chat_webhook_url ? '••• webhook set' : null}
-        />
-        <WorkspaceRow
-          icon={Webhook}
-          label="Revisions"
-          hint="Fires on revision-requested events"
-          value={client.revision_webhook_url ? '••• webhook set' : null}
-        />
-        <WorkspaceRow
-          icon={Webhook}
-          label="Paid media"
-          hint="Fires when a drop is all-clear for paid"
-          value={client.paid_media_webhook_url ? '••• webhook set' : null}
-        />
-      </WorkspaceSection>
+      <WebhooksEditor
+        clientId={client.id}
+        initial={{
+          chat_webhook_url: client.chat_webhook_url ?? '',
+          revision_webhook_url: client.revision_webhook_url ?? '',
+          paid_media_webhook_url: client.paid_media_webhook_url ?? '',
+        }}
+      />
     </>
   );
 }

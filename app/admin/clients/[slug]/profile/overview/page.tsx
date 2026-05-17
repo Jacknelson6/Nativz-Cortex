@@ -70,8 +70,6 @@ export default async function ProfileOverviewPage({
     .single<ClientRow>();
   if (!client) notFound();
 
-  // Pull supplementary counts + names in one round trip each — fast and
-  // small enough we don't bother batching.
   const assigneeIds = [client.default_strategist_id, client.default_editor_id]
     .filter((id): id is string => !!id);
 
@@ -111,7 +109,6 @@ export default async function ProfileOverviewPage({
     ? LIFECYCLE_LABEL[client.lifecycle_state] ?? client.lifecycle_state
     : null;
 
-  const base = `/admin/clients/${slug}/profile`;
   const hashtagCount = (client.caption_hashtags ?? []).filter((h) => h.trim().length > 0).length;
 
   return (
@@ -119,42 +116,20 @@ export default async function ProfileOverviewPage({
       <SettingsPageHeader
         icon={Eye}
         title="Overview"
-        subtitle="A single read of who they are, what we ship, and who's on the account."
+        subtitle="A single read of who they are, what we ship, and who's on the account. Jump to a section in the rail to edit."
       />
 
       <WorkspaceSection
         title="Identity"
         description="The bare facts a new strategist needs to load this brand in their head."
-        openHref={`${base}/identity`}
       >
-        <WorkspaceRow
-          label="Brand name"
-          value={client.name}
-          editHref={`${base}/identity`}
-        />
-        <WorkspaceRow
-          label="Website"
-          value={cleanUrl(client.website_url)}
-          editHref={`${base}/identity`}
-        />
-        <WorkspaceRow
-          label="Industry"
-          value={client.industry}
-          editHref={`${base}/identity`}
-        />
-        <WorkspaceRow
-          label="Lifecycle"
-          value={lifecycleLabel}
-          editHref={`${base}/identity`}
-        />
-        <WorkspaceRow
-          label="Agency"
-          value={client.agency}
-          editHref={`${base}/identity`}
-        />
+        <WorkspaceRow label="Brand name" value={client.name} />
+        <WorkspaceRow label="Website" value={cleanUrl(client.website_url)} />
+        <WorkspaceRow label="Industry" value={client.industry} />
+        <WorkspaceRow label="Lifecycle" value={lifecycleLabel} />
+        <WorkspaceRow label="Agency" value={client.agency} />
         <WorkspaceRow
           label="Logo"
-          editHref={`${base}/identity`}
           rightSlot={
             <ClientLogo
               src={client.logo_url}
@@ -167,54 +142,36 @@ export default async function ProfileOverviewPage({
           label="Description"
           value={preview(client.description, 220)}
           multiline
-          editHref={`${base}/identity`}
         />
       </WorkspaceSection>
 
       <WorkspaceSection
         title="Voice & captions"
         description="The guardrails the AI uses when drafting topic plans, scripts and captions."
-        openHref={`${base}/identity#voice`}
       >
         <WorkspaceRow
           label="Brand voice"
           value={preview(client.brand_voice, 180)}
           multiline
-          editHref={`${base}/identity#voice`}
         />
         <WorkspaceRow
           label="Target audience"
           value={preview(client.target_audience, 180)}
           multiline
-          editHref={`${base}/identity#voice`}
         />
-        <WorkspaceRow
-          label="Caption CTA"
-          value={preview(client.caption_cta, 140)}
-          editHref={`${base}/identity#captions`}
-        />
+        <WorkspaceRow label="Caption CTA" value={preview(client.caption_cta, 140)} />
         <WorkspaceRow
           label="Hashtags"
           value={hashtagCount > 0 ? `${hashtagCount} saved` : null}
-          editHref={`${base}/identity#captions`}
         />
       </WorkspaceSection>
 
       <WorkspaceSection
         title="People"
         description="Who runs this client on our side, plus everyone with portal access."
-        openHref={`${base}/team`}
       >
-        <WorkspaceRow
-          label="Strategist"
-          value={strategist}
-          editHref={`${base}/team`}
-        />
-        <WorkspaceRow
-          label="Editor"
-          value={editor}
-          editHref={`${base}/team`}
-        />
+        <WorkspaceRow label="Strategist" value={strategist} />
+        <WorkspaceRow label="Editor" value={editor} />
         <WorkspaceRow
           label="Users"
           hint="Contacts + portal access"
@@ -223,19 +180,16 @@ export default async function ProfileOverviewPage({
               ? `${contactsCount} contact${contactsCount === 1 ? '' : 's'} · ${invitesCount} invite${invitesCount === 1 ? '' : 's'}`
               : null
           }
-          editHref={`${base}/users`}
         />
       </WorkspaceSection>
 
       <WorkspaceSection
         title="Operations"
         description="Files, history, and the running tally of work in flight."
-        openHref={`${base}/deliverables`}
       >
         <WorkspaceRow
           label="Brand assets"
           value={assetsCount > 0 ? `${assetsCount} file${assetsCount === 1 ? '' : 's'}` : null}
-          editHref={`${base}/assets`}
         />
         <WorkspaceRow
           label="Onboardings"

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { X, Plus } from 'lucide-react';
 import {
-  SectionEditor,
+  InlineSection,
   EditorField,
   editorInputClass,
   editorTextareaClass,
@@ -24,7 +24,7 @@ export function BasicsEditor({
   initial: BasicsDraft;
 }) {
   return (
-    <SectionEditor<BasicsDraft>
+    <InlineSection<BasicsDraft>
       title="Basics"
       description="The bare facts the team needs to load this brand."
       initial={initial}
@@ -91,7 +91,7 @@ export function BasicsEditor({
           </EditorField>
         </>
       )}
-    </SectionEditor>
+    </InlineSection>
   );
 }
 
@@ -110,7 +110,7 @@ export function VoiceEditor({
   initial: VoiceDraft;
 }) {
   return (
-    <SectionEditor<VoiceDraft>
+    <InlineSection<VoiceDraft>
       title="Voice & audience"
       description="Tone, audience, and the phrases the AI must never use."
       initial={initial}
@@ -157,7 +157,7 @@ export function VoiceEditor({
           </EditorField>
         </>
       )}
-    </SectionEditor>
+    </InlineSection>
   );
 }
 
@@ -177,7 +177,7 @@ export function CaptionsEditor({
   initial: CaptionsDraft;
 }) {
   return (
-    <SectionEditor<CaptionsDraft>
+    <InlineSection<CaptionsDraft>
       title="Captions"
       description="Boilerplate appended verbatim to generated captions, plus guidance the AI uses when drafting them."
       initial={initial}
@@ -234,7 +234,7 @@ export function CaptionsEditor({
           </EditorField>
         </>
       )}
-    </SectionEditor>
+    </InlineSection>
   );
 }
 
@@ -248,7 +248,7 @@ export function ProductsEditor({
   initial: ProductsDraft;
 }) {
   return (
-    <SectionEditor<ProductsDraft>
+    <InlineSection<ProductsDraft>
       title="Products"
       description="The product names the team should weight in scripts and captions. Onboarding scrape will eventually populate richer rows here."
       initial={initial}
@@ -264,7 +264,7 @@ export function ProductsEditor({
           />
         </EditorField>
       )}
-    </SectionEditor>
+    </InlineSection>
   );
 }
 
@@ -278,7 +278,7 @@ export function AliasesEditor({
   initial: AliasesDraft;
 }) {
   return (
-    <SectionEditor<AliasesDraft>
+    <InlineSection<AliasesDraft>
       title="Brand aliases"
       description="Alternate names, abbreviations, or misspellings the team uses for this brand."
       initial={initial}
@@ -296,7 +296,7 @@ export function AliasesEditor({
           />
         </EditorField>
       )}
-    </SectionEditor>
+    </InlineSection>
   );
 }
 

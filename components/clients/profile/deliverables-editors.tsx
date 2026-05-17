@@ -1,7 +1,7 @@
 'use client';
 
 import {
-  SectionEditor,
+  InlineSection,
   EditorField,
   editorInputClass,
 } from './section-editor';
@@ -23,7 +23,7 @@ export function ServicesEditor({
   initial: ServicesDraft;
 }) {
   return (
-    <SectionEditor<ServicesDraft>
+    <InlineSection<ServicesDraft>
       title="Services"
       description="What we deliver for this brand. Drives which dashboards + crons run for them."
       initial={initial}
@@ -62,7 +62,7 @@ export function ServicesEditor({
           </div>
         </EditorField>
       )}
-    </SectionEditor>
+    </InlineSection>
   );
 }
 
@@ -76,7 +76,7 @@ export function CapacityEditor({
   initial: CapacityDraft;
 }) {
   return (
-    <SectionEditor<CapacityDraft>
+    <InlineSection<CapacityDraft>
       title="Monthly output"
       description="Number of post slots the calendar cron pre-creates on the 1st of every month. 0 disables the cron."
       initial={initial}
@@ -108,7 +108,7 @@ export function CapacityEditor({
           />
         </EditorField>
       )}
-    </SectionEditor>
+    </InlineSection>
   );
 }
 
@@ -137,7 +137,7 @@ export function PostingDefaultsEditor({
   initial: PostingDraft;
 }) {
   return (
-    <SectionEditor<PostingDraft>
+    <InlineSection<PostingDraft>
       title="Posting defaults"
       description="Used when the calendar pre-fills new drops so the team doesn't have to set time + timezone every month."
       initial={initial}
@@ -174,6 +174,6 @@ export function PostingDefaultsEditor({
           </EditorField>
         </>
       )}
-    </SectionEditor>
+    </InlineSection>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Pencil, X, Loader2 } from 'lucide-react';
@@ -177,3 +177,141 @@ export function EditorField({
 export const editorInputClass =
   'w-full rounded-md border border-nativz-border bg-background px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent';
 export const editorTextareaClass = `${editorInputClass} min-h-[88px] resize-y leading-relaxed`;
+
+/**
+ * InlineSection — Dovetail-style settings section. Title + description live
+ * outside the card, the form lives inside, and a per-section Save button
+ * activates as soon as the draft differs from `initial`. No drawers, no
+ * separate edit pages — what you see is what you save.
+ *
+ * Pairs with `EditorField` + `editorInputClass`/`editorTextareaClass` so
+ * inputs look identical to the legacy drawer-based SectionEditor.
+ */
+export function InlineSection<T extends Record<string, unknown>>({
+  title,
+  description,
+  initial,
+  endpoint,
+  method = 'PATCH',
+  buildBody,
+  validate,
+  saveLabel = 'Save changes',
+  successMessage = 'Saved',
+  anchor,
+  children,
+}: {
+  title: string;
+  description?: string;
+  initial: T;
+  endpoint: string;
+  method?: 'PATCH' | 'POST' | 'PUT';
+  buildBody?: (draft: T) => Record<string, unknown>;
+  validate?: (draft: T) => string | null;
+  saveLabel?: string;
+  successMessage?: string;
+  /** Anchor id so deep links from overview can scroll the section into view. */
+  anchor?: string;
+  children: (draft: T, set: (patch: Partial<T>) => void) => ReactNode;
+}) {
+  const router = useRouter();
+  const [draft, setDraft] = useState<T>(initial);
+  const [saving, setSaving] = useState(false);
+  const initialRef = useRef(initial);
+
+  useEffect(() => {
+    initialRef.current = initial;
+    setDraft(initial);
+  }, [initial]);
+
+  const dirty = useMemo(() => !shallowEqual(draft, initialRef.current), [draft]);
+
+  function setPartial(patch: Partial<T>) {
+    setDraft((prev) => ({ ...prev, ...patch }));
+  }
+
+  async function handleSave() {
+    const err = validate?.(draft);
+    if (err) {
+      toast.error(err);
+      return;
+    }
+    setSaving(true);
+    try {
+      const body = buildBody ? buildBody(draft) : (draft as Record<string, unknown>);
+      const res = await fetch(endpoint, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Save failed (${res.status})`);
+      }
+      toast.success(successMessage);
+      initialRef.current = draft;
+      router.refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Save failed');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleReset() {
+    setDraft(initialRef.current);
+  }
+
+  return (
+    <section className="space-y-3" id={anchor}>
+      <header className="space-y-1">
+        <h2 className="text-sm font-semibold text-text-primary leading-tight">{title}</h2>
+        {description && (
+          <p className="text-xs text-text-muted leading-relaxed">{description}</p>
+        )}
+      </header>
+      <div className="rounded-xl border border-nativz-border bg-surface overflow-hidden">
+        <div className="px-4 py-4 space-y-4">{children(draft, setPartial)}</div>
+        <footer className="flex items-center justify-end gap-2 border-t border-nativz-border bg-surface-hover/30 px-4 py-2.5">
+          {dirty && (
+            <button
+              type="button"
+              onClick={handleReset}
+              disabled={saving}
+              className="rounded-md px-3 py-1.5 text-xs text-text-muted hover:text-text-primary hover:bg-surface-hover disabled:opacity-50"
+            >
+              Discard
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={!dirty || saving}
+            className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {saving && <Loader2 size={12} className="animate-spin" />}
+            {saveLabel}
+          </button>
+        </footer>
+      </div>
+    </section>
+  );
+}
+
+function shallowEqual<T extends Record<string, unknown>>(a: T, b: T): boolean {
+  const ak = Object.keys(a);
+  const bk = Object.keys(b);
+  if (ak.length !== bk.length) return false;
+  for (const k of ak) {
+    const av = a[k];
+    const bv = b[k];
+    if (Array.isArray(av) && Array.isArray(bv)) {
+      if (av.length !== bv.length) return false;
+      for (let i = 0; i < av.length; i++) {
+        if (av[i] !== bv[i]) return false;
+      }
+      continue;
+    }
+    if (av !== bv) return false;
+  }
+  return true;
+}
