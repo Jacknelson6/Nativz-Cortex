@@ -10,8 +10,8 @@ import {
   useState,
 } from 'react';
 import {
-  AlertCircle, AlertTriangle, AtSign, BellRing, CalendarDays, CheckCircle, Clock,
-  Download, Eye, EyeOff, File as FileIcon, Film, ImageUp, List, Loader2, LogIn, MapPin, MessageSquare,
+  AlertCircle, AlertTriangle, BellRing, CalendarDays, CheckCircle, Clock,
+  Download, Eye, EyeOff, Film, ImageUp, List, Loader2, LogIn, MapPin, MessageSquare,
   Paperclip, Pencil, Play, Plus, RefreshCw, RotateCcw, Send, Tag, Trash2, Type, Undo2,
   Upload, Users, VideoOff, X,
 } from 'lucide-react';
@@ -3316,7 +3316,8 @@ function PostCard({
             <CommentRow
               key={c.id}
               comment={c}
-              replies={repliesByParent[c.id] ?? []}
+              repliesByParent={repliesByParent}
+              depth={0}
               postId={post.id}
               token={token}
               isEditor={isEditor}
@@ -3327,6 +3328,14 @@ function PostCard({
               onReplyAdded={onCommentAdded}
               onReplyRemoved={onCommentRemoved}
               onSeek={playerReady ? seekTo : undefined}
+              getPlayheadSeconds={
+                playerReady
+                  ? () => {
+                      const t = playerHandleRef.current?.getCurrentTime() ?? 0;
+                      return Math.max(0, Math.floor(t));
+                    }
+                  : undefined
+              }
             />
           ))}
         </div>
@@ -3718,7 +3727,7 @@ function PostCard({
 
 function CommentRow({
   comment,
-  replies = [],
+  repliesByParent,
   postId,
   token,
   isEditor,
@@ -3729,14 +3738,15 @@ function CommentRow({
   onReplyAdded,
   onReplyRemoved,
   onSeek,
-  isReply = false,
+  getPlayheadSeconds,
+  depth = 0,
 }: {
   comment: SharedComment;
-  // NAT-73: inline replies rendered indented under this row. Only the
-  // top-level rendering pass passes a non-empty array; the row itself
-  // renders each reply as another `<CommentRow>` with `isReply` set so the
-  // recursive call drops the Reply affordance and the further nesting.
-  replies?: SharedComment[];
+  // Reddit-style adjacency map keyed by parent comment id. Each row pulls
+  // its own children via `repliesByParent[comment.id]` and recurses; the
+  // visual indent is capped at depth 4 so deep threads flatten instead of
+  // tunneling off-screen.
+  repliesByParent: Record<string, SharedComment[]>;
   postId?: string;
   token: string;
   isEditor: boolean;
@@ -3756,14 +3766,81 @@ function CommentRow({
   // shared player. Undefined for list-view rows where there's no inline
   // player to drive (the user opens the lightbox instead).
   onSeek?: (seconds: number) => void;
-  // Set on the recursive render of reply rows. Drops the Reply button (one
-  // level of nesting only) and tightens the chrome.
-  isReply?: boolean;
+  // Reads the live playhead so the reply composer can stamp a timestamp
+  // anchor. Returns null when there is no player on screen (image post,
+  // list view, etc.); the reply composer hides the timestamp affordance
+  // entirely in that case.
+  getPlayheadSeconds?: () => number | null;
+  // Nesting depth. 0 = top-level. Children are rendered with depth+1.
+  // Visual indent is applied only while depth < 4; deeper levels render
+  // children at the same indent as depth 4 to keep mobile readable.
+  depth?: number;
 }) {
+  const replies = repliesByParent[comment.id] ?? [];
   const [replyOpen, setReplyOpen] = useState(false);
   const [replyText, setReplyText] = useState('');
   const [sendingReply, setSendingReply] = useState(false);
+  const [replyAttachments, setReplyAttachments] = useState<CommentAttachment[]>([]);
+  const [uploadingReply, setUploadingReply] = useState(false);
+  const [replyPinEnabled, setReplyPinEnabled] = useState(false);
+  const [livePlayheadSecondsLocal, setLivePlayheadSecondsLocal] = useState<number | null>(null);
   const replyTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const replyFileInputRef = useRef<HTMLInputElement | null>(null);
+  const playerAvailable = typeof getPlayheadSeconds === 'function';
+
+  // Poll the player every ~500ms while the reply pin is on so the chip
+  // tracks the playhead. Mirrors the live chip behavior in the main
+  // composer; we only run the interval while the composer is open AND the
+  // user opted into pinning (otherwise it's wasted work).
+  useEffect(() => {
+    if (!replyOpen || !replyPinEnabled || !getPlayheadSeconds) return;
+    function tick() {
+      setLivePlayheadSecondsLocal(getPlayheadSeconds?.() ?? null);
+    }
+    tick();
+    const id = window.setInterval(tick, 500);
+    return () => window.clearInterval(id);
+  }, [replyOpen, replyPinEnabled, getPlayheadSeconds]);
+
+  async function uploadReplyFiles(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    if (replyAttachments.length + files.length > 10) {
+      toast.error('Up to 10 attachments per comment');
+      return;
+    }
+    setUploadingReply(true);
+    const next: CommentAttachment[] = [];
+    try {
+      for (const file of Array.from(files)) {
+        const fd = new FormData();
+        fd.append('file', file);
+        const res = await fetch(`/api/calendar/share/${token}/upload`, {
+          method: 'POST',
+          body: fd,
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'Upload failed');
+        next.push(json as CommentAttachment);
+      }
+      setReplyAttachments((prev) => [...prev, ...next]);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      setUploadingReply(false);
+      if (replyFileInputRef.current) replyFileInputRef.current.value = '';
+    }
+  }
+
+  function removeReplyAttachment(url: string) {
+    setReplyAttachments((prev) => prev.filter((a) => a.url !== url));
+  }
+
+  function resetReplyDraft() {
+    setReplyText('');
+    setReplyAttachments([]);
+    setReplyPinEnabled(false);
+    setReplyOpen(false);
+  }
 
   // Auto-focus the reply textarea the first frame it mounts. Doing it inside
   // a useEffect (vs. autoFocus) so re-opens after a cancel also refocus.
@@ -3780,13 +3857,15 @@ function CommentRow({
   async function submitReply() {
     if (sendingReply) return;
     const trimmed = replyText.trim();
-    if (!trimmed) return;
+    if (!trimmed && replyAttachments.length === 0) return;
     if (!authorName?.trim()) {
       requireName?.();
       return;
     }
     if (!postId || !onReplyAdded) return;
     setSendingReply(true);
+    const anchorSeconds =
+      replyPinEnabled && getPlayheadSeconds ? getPlayheadSeconds() : null;
     try {
       const res = await fetch(`/api/calendar/share/${token}/comment`, {
         method: 'POST',
@@ -3796,8 +3875,8 @@ function CommentRow({
           authorName: authorName.trim(),
           content: trimmed,
           status: 'comment',
-          attachments: [],
-          timestampSeconds: null,
+          attachments: replyAttachments,
+          timestampSeconds: anchorSeconds,
           parentCommentId: comment.id,
         }),
       });
@@ -3806,8 +3885,7 @@ function CommentRow({
         throw new Error(typeof json.error === 'string' ? json.error : 'Failed to send reply');
       }
       onReplyAdded(json.comment as SharedComment);
-      setReplyText('');
-      setReplyOpen(false);
+      resetReplyDraft();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to send reply');
     } finally {
@@ -4030,10 +4108,11 @@ function CommentRow({
         {formatSeconds(comment.timestamp_seconds)}
       </button>
     ) : null;
-  // NAT-73: reply gate, only top-level `comment` rows get the affordance.
-  // Replies-to-replies are disallowed (one level of nesting).
+  // Reddit-style threading: any `comment` row can be replied to. The DB
+  // accepts unlimited depth; the UI caps *visual* indent at depth 4 so
+  // deep chains stay readable. Activity rows (caption/tag/cover/schedule
+  // edits) still don't expose a Reply affordance.
   const canReply =
-    !isReply &&
     comment.status === 'comment' &&
     !!postId &&
     !!onReplyAdded;
@@ -4078,11 +4157,11 @@ function CommentRow({
           </div>
         )}
         {canReply && replyOpen && (
-          // Inline composer, sits inside the parent row so it visually
-          // belongs to the comment it's responding to. Deliberately lighter
-          // chrome than the main composer at the bottom of the post (no
-          // attachments, no status picker), replies are short follow-ups.
-          <div className="mt-2 rounded-md border border-nativz-border bg-background/40 p-2">
+          // Inline composer with full parity to the main post-level
+          // composer: text, attachments, and (when there's a player on
+          // screen) a timestamp anchor pill. Slightly tighter chrome so
+          // it still reads as a reply rather than a fresh comment.
+          <div className="mt-2 rounded-md border border-nativz-border bg-background/40">
             <textarea
               ref={replyTextareaRef}
               value={replyText}
@@ -4093,48 +4172,118 @@ function CommentRow({
                   void submitReply();
                 } else if (e.key === 'Escape') {
                   e.preventDefault();
-                  setReplyText('');
-                  setReplyOpen(false);
+                  resetReplyDraft();
                 }
               }}
               placeholder={`Reply to ${comment.author_name}...`}
               rows={2}
-              className="w-full resize-none rounded-sm border-0 bg-transparent text-[13px] leading-relaxed text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-0"
+              disabled={sendingReply}
+              className="w-full resize-none rounded-t-md border-0 bg-transparent px-2 py-1.5 text-[13px] leading-relaxed text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-0"
             />
-            <div className="mt-1.5 flex items-center justify-end gap-1.5">
+            {replyAttachments.length > 0 && (
+              <div className="flex flex-wrap gap-2 px-2 pb-1.5">
+                {replyAttachments.map((a) => (
+                  <AttachmentChip
+                    key={a.url}
+                    attachment={a}
+                    onRemove={() => removeReplyAttachment(a.url)}
+                  />
+                ))}
+              </div>
+            )}
+            <input
+              ref={replyFileInputRef}
+              type="file"
+              multiple
+              accept="image/*,video/*,application/pdf"
+              className="hidden"
+              onChange={(e) => uploadReplyFiles(e.target.files)}
+            />
+            <div className="flex flex-wrap items-center gap-1.5 border-t border-nativz-border/60 px-1.5 py-1.5">
               <button
                 type="button"
-                onClick={() => {
-                  setReplyText('');
-                  setReplyOpen(false);
-                }}
-                disabled={sendingReply}
-                className="rounded-md border border-nativz-border bg-transparent px-2 py-1 text-[11px] text-text-secondary transition-colors hover:bg-surface-hover disabled:opacity-50"
+                onClick={() => replyFileInputRef.current?.click()}
+                disabled={sendingReply || uploadingReply || replyAttachments.length >= 10}
+                className="inline-flex items-center gap-1 rounded-md bg-transparent px-1.5 py-0.5 text-[11px] font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
               >
-                Cancel
+                {uploadingReply ? <Loader2 size={11} className="animate-spin" /> : <Paperclip size={11} />}
+                {uploadingReply ? 'Uploading…' : 'Attach'}
               </button>
-              <button
-                type="button"
-                onClick={() => void submitReply()}
-                disabled={sendingReply || !replyText.trim()}
-                className="inline-flex items-center gap-1 rounded-md bg-accent px-2.5 py-1 text-[11px] font-medium text-accent-contrast transition-opacity hover:opacity-90 disabled:opacity-50"
-              >
-                {sendingReply ? <Loader2 size={10} className="animate-spin" /> : <Send size={10} />}
-                Reply
-              </button>
+              {playerAvailable && (
+                replyPinEnabled ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-accent-surface px-2 py-0.5 text-[11px] font-medium text-accent-text ring-1 ring-accent/40">
+                    <MapPin size={10} />
+                    At {formatSeconds(livePlayheadSecondsLocal ?? 0)}
+                    <button
+                      type="button"
+                      onClick={() => setReplyPinEnabled(false)}
+                      className="ml-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full hover:bg-accent/20"
+                      aria-label="Don't reference a timestamp"
+                      title="Don't reference a timestamp"
+                    >
+                      <X size={9} />
+                    </button>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLivePlayheadSecondsLocal(getPlayheadSeconds?.() ?? 0);
+                      setReplyPinEnabled(true);
+                    }}
+                    disabled={sendingReply}
+                    className="inline-flex items-center gap-1 rounded-md bg-transparent px-1.5 py-0.5 text-[11px] font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
+                    title="Reference current timestamp"
+                  >
+                    <MapPin size={11} /> Timestamp
+                  </button>
+                )
+              )}
+              <div className="ml-auto flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={resetReplyDraft}
+                  disabled={sendingReply || uploadingReply}
+                  className="rounded-md border border-nativz-border bg-transparent px-2 py-0.5 text-[11px] text-text-secondary transition-colors hover:bg-surface-hover disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void submitReply()}
+                  disabled={
+                    sendingReply ||
+                    uploadingReply ||
+                    (!replyText.trim() && replyAttachments.length === 0)
+                  }
+                  className="inline-flex items-center gap-1 rounded-md bg-accent px-2.5 py-1 text-[11px] font-medium text-accent-contrast transition-opacity hover:opacity-90 disabled:opacity-50"
+                >
+                  {sendingReply ? <Loader2 size={10} className="animate-spin" /> : <Send size={10} />}
+                  Reply
+                </button>
+              </div>
             </div>
           </div>
         )}
       </div>
-      {replies.length > 0 && !isReply && (
-        // Indented thread under the parent. One level only, these child
-        // rows render with `isReply` so they drop their own Reply button.
-        <div className="ml-6 mt-2 space-y-2 border-l-2 border-nativz-border/60 pl-3">
+      {replies.length > 0 && (
+        // Indented thread under the parent. Visual indent is applied only
+        // while depth < 4; deeper levels render flush with the depth-4
+        // indent so mobile reading stays sane. Replies recurse with
+        // `depth + 1` so every level handles its own children.
+        <div
+          className={
+            depth < 4
+              ? 'ml-6 mt-2 space-y-2 border-l-2 border-nativz-border/60 pl-3'
+              : 'mt-2 space-y-2'
+          }
+        >
           {replies.map((r) => (
             <CommentRow
               key={r.id}
               comment={r}
-              isReply
+              repliesByParent={repliesByParent}
+              depth={depth + 1}
               token={token}
               isEditor={isEditor}
               postId={postId}
@@ -4142,7 +4291,10 @@ function CommentRow({
               requireName={requireName}
               onDeleted={() => onReplyRemoved?.(r.id)}
               onUpdated={onUpdated}
+              onReplyAdded={onReplyAdded}
+              onReplyRemoved={onReplyRemoved}
               onSeek={onSeek}
+              getPlayheadSeconds={getPlayheadSeconds}
             />
           ))}
         </div>

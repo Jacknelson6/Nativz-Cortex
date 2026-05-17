@@ -12,7 +12,6 @@ import {
   Download,
   Eye,
   EyeOff,
-  File as FileIcon,
   FileVideo,
   Film,
   Loader2,
@@ -100,6 +99,10 @@ interface SharedComment {
   attachments: CommentAttachment[];
   metadata: Record<string, unknown>;
   timestamp_seconds: number | null;
+  // Reply parent. NULL = top-level comment. Set on inline replies so the
+  // UI can render them nested under the parent. Unlimited at the DB; the
+  // UI caps visual indent at depth 4.
+  parent_comment_id: string | null;
   created_at: string;
 }
 
@@ -1190,6 +1193,7 @@ function VideoCard({
       attachments: snapshotAttachments,
       metadata: {},
       timestamp_seconds: anchorSeconds,
+      parent_comment_id: null,
       created_at: new Date().toISOString(),
     };
 
@@ -1610,6 +1614,30 @@ function VideoCard({
     />
   ) : null;
 
+  // Reddit-style: split into top-level + reply adjacency map so CommentRow
+  // can recurse and render arbitrary-depth threads (visual indent caps at
+  // depth 4). Orphans (parent missing from this clip's comments, which
+  // shouldn't happen but is defensive) hoist back to the top level so they
+  // still render rather than disappearing.
+  const editRepliesByParent: Record<string, SharedComment[]> = {};
+  const editTopLevelComments: SharedComment[] = [];
+  for (const c of video.comments) {
+    if (c.parent_comment_id) {
+      (editRepliesByParent[c.parent_comment_id] ||= []).push(c);
+    } else {
+      editTopLevelComments.push(c);
+    }
+  }
+  const editTopLevelIds = new Set(editTopLevelComments.map((c) => c.id));
+  for (const c of video.comments) {
+    if (c.parent_comment_id && !editTopLevelIds.has(c.parent_comment_id)) {
+      editTopLevelComments.push(c);
+    }
+  }
+  editTopLevelComments.sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+  );
+
   const historyBlock =
     video.comments.length > 0 ? (
       <div className="mt-2 border-t border-nativz-border bg-background/40 px-3 py-4 sm:px-4">
@@ -1622,15 +1650,30 @@ function VideoCard({
           </span>
         </div>
         <div className="space-y-2 pr-1">
-          {video.comments.map((c) => (
+          {editTopLevelComments.map((c) => (
             <CommentRow
               key={c.id}
               comment={c}
+              repliesByParent={editRepliesByParent}
+              depth={0}
+              videoId={video.id}
               token={token}
               isEditor={isEditor}
+              authorName={authorName}
+              requireName={requireName}
               onDeleted={() => onCommentRemoved(c.id)}
               onUpdated={onCommentUpdated}
+              onReplyAdded={onCommentAdded}
+              onReplyRemoved={onCommentRemoved}
               onSeek={playerReady ? seekTo : undefined}
+              getPlayheadSeconds={
+                playerReady
+                  ? () => {
+                      const t = videoElRef.current?.currentTime ?? 0;
+                      return Math.max(0, Math.floor(t));
+                    }
+                  : undefined
+              }
             />
           ))}
         </div>
@@ -1852,19 +1895,149 @@ function VideoCard({
 
 function CommentRow({
   comment,
+  repliesByParent,
+  depth = 0,
+  videoId,
   token,
   isEditor,
+  authorName,
+  requireName,
   onDeleted,
   onUpdated,
+  onReplyAdded,
+  onReplyRemoved,
   onSeek,
+  getPlayheadSeconds,
 }: {
   comment: SharedComment;
+  // Reddit-style adjacency map. Each row looks up its own children via
+  // `repliesByParent[comment.id]` and recurses; visual indent caps at
+  // depth 4 so deep chains stay readable on mobile.
+  repliesByParent: Record<string, SharedComment[]>;
+  depth?: number;
+  videoId?: string;
   token: string;
   isEditor: boolean;
+  authorName?: string;
+  requireName?: () => void;
   onDeleted: () => void;
   onUpdated: (comment: SharedComment) => void;
+  onReplyAdded?: (comment: SharedComment) => void;
+  onReplyRemoved?: (commentId: string) => void;
   onSeek?: (seconds: number) => void;
+  // Reads the live playhead so the reply composer can stamp an anchor.
+  // Returns null when there's no player on screen (image clip / list view).
+  getPlayheadSeconds?: () => number | null;
 }) {
+  const replies = repliesByParent[comment.id] ?? [];
+  const [replyOpen, setReplyOpen] = useState(false);
+  const [replyText, setReplyText] = useState('');
+  const [sendingReply, setSendingReply] = useState(false);
+  const [replyAttachments, setReplyAttachments] = useState<CommentAttachment[]>([]);
+  const [uploadingReply, setUploadingReply] = useState(false);
+  const [replyPinEnabled, setReplyPinEnabled] = useState(false);
+  const [livePlayheadSecondsLocal, setLivePlayheadSecondsLocal] = useState<number | null>(null);
+  const replyTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const replyFileInputRef = useRef<HTMLInputElement | null>(null);
+  const playerAvailable = typeof getPlayheadSeconds === 'function';
+
+  useEffect(() => {
+    if (replyOpen && replyTextareaRef.current) {
+      replyTextareaRef.current.focus();
+    }
+  }, [replyOpen]);
+
+  useEffect(() => {
+    if (!replyOpen || !replyPinEnabled || !getPlayheadSeconds) return;
+    function tick() {
+      setLivePlayheadSecondsLocal(getPlayheadSeconds?.() ?? null);
+    }
+    tick();
+    const id = window.setInterval(tick, 500);
+    return () => window.clearInterval(id);
+  }, [replyOpen, replyPinEnabled, getPlayheadSeconds]);
+
+  async function uploadReplyFiles(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    if (replyAttachments.length + files.length > 10) {
+      toast.error('Up to 10 attachments per comment');
+      return;
+    }
+    setUploadingReply(true);
+    const next: CommentAttachment[] = [];
+    try {
+      for (const file of Array.from(files)) {
+        const fd = new FormData();
+        fd.append('file', file);
+        const res = await fetch(`/api/editing/share/${token}/upload`, {
+          method: 'POST',
+          body: fd,
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          throw new Error(typeof json.error === 'string' ? json.error : 'Upload failed');
+        }
+        next.push(json as CommentAttachment);
+      }
+      setReplyAttachments((prev) => [...prev, ...next]);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      setUploadingReply(false);
+      if (replyFileInputRef.current) replyFileInputRef.current.value = '';
+    }
+  }
+
+  function removeReplyAttachment(url: string) {
+    setReplyAttachments((prev) => prev.filter((a) => a.url !== url));
+  }
+
+  function resetReplyDraft() {
+    setReplyText('');
+    setReplyAttachments([]);
+    setReplyPinEnabled(false);
+    setReplyOpen(false);
+  }
+
+  async function submitReply() {
+    if (sendingReply) return;
+    const trimmed = replyText.trim();
+    if (!trimmed && replyAttachments.length === 0) return;
+    if (!authorName?.trim()) {
+      requireName?.();
+      return;
+    }
+    if (!videoId || !onReplyAdded) return;
+    setSendingReply(true);
+    const anchorSeconds =
+      replyPinEnabled && getPlayheadSeconds ? getPlayheadSeconds() : null;
+    try {
+      const res = await fetch(`/api/editing/share/${token}/comment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          videoId,
+          authorName: authorName.trim(),
+          content: trimmed,
+          status: 'comment',
+          attachments: replyAttachments,
+          timestampSeconds: anchorSeconds,
+          parentCommentId: comment.id,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(typeof json.error === 'string' ? json.error : 'Failed to send reply');
+      }
+      onReplyAdded(json.comment as SharedComment);
+      resetReplyDraft();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to send reply');
+    } finally {
+      setSendingReply(false);
+    }
+  }
+
   const [deleting, setDeleting] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [dontAsk, setDontAsk] = useState(false);
@@ -1964,8 +2137,6 @@ function CommentRow({
     );
   }
 
-  const resolveButton = null;
-
   const headerDeleteButton = (
     <button
       type="button"
@@ -2031,31 +2202,188 @@ function CommentRow({
       </button>
     ) : null;
 
+  const canReply =
+    comment.status === 'comment' && !!videoId && !!onReplyAdded;
+
   return (
-    <div className={containerClass}>
-      <div className="mb-1 flex items-center gap-2 text-[13px]">
-        <Icon size={12} className={tone} />
-        <span className="font-medium text-text-primary">{comment.author_name}</span>
-        <RoleChip role={comment.author_role} />
-        <span className="text-text-muted">
-          · {time}
-        </span>
-        {timestampPill}
-        {headerDeleteButton}
+    <>
+      <div className={containerClass}>
+        <div className="mb-1 flex items-center gap-2 text-[13px]">
+          <Icon size={12} className={tone} />
+          <span className="font-medium text-text-primary">{comment.author_name}</span>
+          <RoleChip role={comment.author_role} />
+          <span className="text-text-muted">
+            · {time}
+          </span>
+          {timestampPill}
+          {headerDeleteButton}
+        </div>
+        {comment.content && (
+          <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-text-secondary">
+            {comment.content}
+          </p>
+        )}
+        {comment.attachments.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {comment.attachments.map((a) => (
+              <CommentAttachmentTile key={a.url} attachment={a} />
+            ))}
+          </div>
+        )}
+        {canReply && !replyOpen && (
+          <div className="mt-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                if (!authorName?.trim()) {
+                  requireName?.();
+                  return;
+                }
+                setReplyOpen(true);
+              }}
+              className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-text-muted transition-colors hover:bg-surface-hover hover:text-text-primary"
+            >
+              <MessageSquare size={11} />
+              Reply
+            </button>
+          </div>
+        )}
+        {canReply && replyOpen && (
+          <div className="mt-2 rounded-md border border-nativz-border bg-background/40">
+            <textarea
+              ref={replyTextareaRef}
+              value={replyText}
+              onChange={(e) => setReplyText(e.target.value)}
+              onKeyDown={(e) => {
+                if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                  e.preventDefault();
+                  void submitReply();
+                } else if (e.key === 'Escape') {
+                  e.preventDefault();
+                  resetReplyDraft();
+                }
+              }}
+              placeholder={`Reply to ${comment.author_name}...`}
+              rows={2}
+              disabled={sendingReply}
+              className="w-full resize-none rounded-t-md border-0 bg-transparent px-2 py-1.5 text-[13px] leading-relaxed text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-0"
+            />
+            {replyAttachments.length > 0 && (
+              <div className="flex flex-wrap gap-2 px-2 pb-1.5">
+                {replyAttachments.map((a) => (
+                  <AttachmentChip
+                    key={a.url}
+                    attachment={a}
+                    onRemove={() => removeReplyAttachment(a.url)}
+                  />
+                ))}
+              </div>
+            )}
+            <input
+              ref={replyFileInputRef}
+              type="file"
+              multiple
+              accept="image/*,video/*,application/pdf"
+              className="hidden"
+              onChange={(e) => uploadReplyFiles(e.target.files)}
+            />
+            <div className="flex flex-wrap items-center gap-1.5 border-t border-nativz-border/60 px-1.5 py-1.5">
+              <button
+                type="button"
+                onClick={() => replyFileInputRef.current?.click()}
+                disabled={sendingReply || uploadingReply || replyAttachments.length >= 10}
+                className="inline-flex items-center gap-1 rounded-md bg-transparent px-1.5 py-0.5 text-[11px] font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
+              >
+                {uploadingReply ? <Loader2 size={11} className="animate-spin" /> : <Paperclip size={11} />}
+                {uploadingReply ? 'Uploading…' : 'Attach'}
+              </button>
+              {playerAvailable && (
+                replyPinEnabled ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-accent-surface px-2 py-0.5 text-[11px] font-medium text-accent-text ring-1 ring-accent/40">
+                    <MapPin size={10} />
+                    At {formatSeconds(livePlayheadSecondsLocal ?? 0)}
+                    <button
+                      type="button"
+                      onClick={() => setReplyPinEnabled(false)}
+                      className="ml-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full hover:bg-accent/20"
+                      aria-label="Don't reference a timestamp"
+                      title="Don't reference a timestamp"
+                    >
+                      <X size={9} />
+                    </button>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLivePlayheadSecondsLocal(getPlayheadSeconds?.() ?? 0);
+                      setReplyPinEnabled(true);
+                    }}
+                    disabled={sendingReply}
+                    className="inline-flex items-center gap-1 rounded-md bg-transparent px-1.5 py-0.5 text-[11px] font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary disabled:opacity-50"
+                    title="Reference current timestamp"
+                  >
+                    <MapPin size={11} /> Timestamp
+                  </button>
+                )
+              )}
+              <div className="ml-auto flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={resetReplyDraft}
+                  disabled={sendingReply || uploadingReply}
+                  className="rounded-md border border-nativz-border bg-transparent px-2 py-0.5 text-[11px] text-text-secondary transition-colors hover:bg-surface-hover disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void submitReply()}
+                  disabled={
+                    sendingReply ||
+                    uploadingReply ||
+                    (!replyText.trim() && replyAttachments.length === 0)
+                  }
+                  className="inline-flex items-center gap-1 rounded-md bg-accent px-2.5 py-1 text-[11px] font-medium text-accent-contrast transition-opacity hover:opacity-90 disabled:opacity-50"
+                >
+                  {sendingReply ? <Loader2 size={10} className="animate-spin" /> : <Send size={10} />}
+                  Reply
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
-      {comment.content && (
-        <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-text-secondary">
-          {comment.content}
-        </p>
-      )}
-      {comment.attachments.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-2">
-          {comment.attachments.map((a) => (
-            <CommentAttachmentTile key={a.url} attachment={a} />
+      {replies.length > 0 && (
+        <div
+          className={
+            depth < 4
+              ? 'ml-6 mt-2 space-y-2 border-l-2 border-nativz-border/60 pl-3'
+              : 'mt-2 space-y-2'
+          }
+        >
+          {replies.map((r) => (
+            <CommentRow
+              key={r.id}
+              comment={r}
+              repliesByParent={repliesByParent}
+              depth={depth + 1}
+              videoId={videoId}
+              token={token}
+              isEditor={isEditor}
+              authorName={authorName}
+              requireName={requireName}
+              onDeleted={() => onReplyRemoved?.(r.id)}
+              onUpdated={onUpdated}
+              onReplyAdded={onReplyAdded}
+              onReplyRemoved={onReplyRemoved}
+              onSeek={onSeek}
+              getPlayheadSeconds={getPlayheadSeconds}
+            />
           ))}
         </div>
       )}
-    </div>
+    </>
   );
 }
 

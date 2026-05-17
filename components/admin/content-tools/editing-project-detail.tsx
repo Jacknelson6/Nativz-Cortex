@@ -12,7 +12,6 @@ import { toast } from 'sonner';
 import {
   CalendarDays,
   Check,
-  CheckCheck,
   CheckCircle2,
   Copy,
   Eye,
@@ -71,10 +70,10 @@ import {
  *   - Inline rename, type change, status flip, notes
  *   - Drag-drop multi-video upload of edited cuts
  *   - Raw footage as a single Drive folder URL link
- *   - Share link lifecycle: mint, copy, send/resend, revisions-complete,
- *     revoke. The Send action mirrors the calendar pattern exactly: a
- *     SendPreviewDialog with edit/preview render mode toggle, defaulting
- *     to delivery vs re-review based on whether the link has been sent.
+ *   - Share link lifecycle: mint, copy, send/resend, revoke. The Send
+ *     action mirrors the calendar pattern exactly: a SendPreviewDialog
+ *     with edit/preview render mode toggle, defaulting to delivery vs
+ *     re-review based on whether the link has been sent.
  */
 
 const STATUS_OPTIONS: { value: EditingProjectStatus; label: string }[] = (
@@ -187,7 +186,6 @@ export function EditingProjectDetail({
   const [expiresOverride, setExpiresOverride] = useState<string | null>(null);
   const [refreshedThisSession, setRefreshedThisSession] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [firingRevisions, setFiringRevisions] = useState(false);
 
   const [previewVariant, setPreviewVariant] = useState<SendVariant | null>(null);
   const [preview, setPreview] = useState<SendPreview | null>(null);
@@ -230,13 +228,6 @@ export function EditingProjectDetail({
     confirmLabel: 'Delete',
     variant: 'danger',
   });
-  const { confirm: confirmFireRevisions, dialog: fireRevisionsDialog } = useConfirm({
-    title: 'Send the "revisions complete" email?',
-    description: 'It fires immediately to the brand contacts.',
-    confirmLabel: 'Send',
-    variant: 'success',
-  });
-
   const projectId = project?.id ?? null;
   const clientId = project?.client_id ?? null;
 
@@ -558,32 +549,6 @@ export function EditingProjectDetail({
     }
   }
 
-  async function fireRevisionsComplete() {
-    if (!projectId || !activeLink || firingRevisions) return;
-    const ok = await confirmFireRevisions();
-    if (!ok) return;
-    setFiringRevisions(true);
-    try {
-      const res = await fetch(
-        `/api/admin/editing/projects/${projectId}/share/${activeLink.id}/revisions-complete`,
-        { method: 'POST' },
-      );
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(
-          typeof json?.error === 'string' ? json.error : 'Send failed',
-        );
-      }
-      toast.success('Revisions-complete email sent');
-      await loadShareLinks();
-      void loadArchivedEmails();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Send failed');
-    } finally {
-      setFiringRevisions(false);
-    }
-  }
-
   async function openSendPreview(variant: SendVariant) {
     if (!projectId || !activeLink) return;
     setPreviewVariant(variant);
@@ -724,12 +689,10 @@ export function EditingProjectDetail({
       ? 'Add a contact to the brand profile to send the link.'
       : null;
 
-  const showRevisionsCta =
-    activeLink?.revisions_status === 'has_comments' && !sendDisabledReason;
   const hasBeenSent = !!activeLink?.last_review_email_sent_at;
-  // Project is in a terminal approved state — hide the Send re-review /
-  // revisions-complete CTAs so we don't burn an email on a closed loop.
-  // Archive stays available; the unified pill carries the "Approved" signal.
+  // Project is in a terminal approved state, hide the Send re-review CTA so
+  // we don't burn an email on a closed loop. Archive stays available; the
+  // unified pill carries the "Approved" signal.
   const isApproved =
     project.status === 'approved' ||
     project.status === 'done' ||
@@ -757,23 +720,6 @@ export function EditingProjectDetail({
         <Trash2 size={13} />
         Delete project
       </Button>
-      {activeLink && showRevisionsCta && !isApproved && (
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          onClick={fireRevisionsComplete}
-          disabled={firingRevisions}
-          title="Notify the brand that every revision request on this link is resolved."
-        >
-          {firingRevisions ? (
-            <Loader2 size={13} className="animate-spin" />
-          ) : (
-            <CheckCheck size={13} />
-          )}
-          {firingRevisions ? 'Sending...' : 'Send revisions complete'}
-        </Button>
-      )}
       {!activeLink && hasVideos && !isApproved && (
         <Button
           type="button"
@@ -1274,7 +1220,6 @@ export function EditingProjectDetail({
       </ContentDetailDialog>
       {archiveDialog}
       {deleteVideoDialog}
-      {fireRevisionsDialog}
     </>
   );
 }

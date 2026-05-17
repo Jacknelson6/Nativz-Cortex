@@ -26,7 +26,8 @@ export type NotificationType =
   | 'topic_search_stuck'
   | 'pipeline_alert'
   | 'onboarding_milestone'
-  | 'followup_sent';
+  | 'followup_sent'
+  | 'share_comment_batch';
 
 /** Load merged notification preferences for a user */
 export async function getUserNotificationPreferences(userId: string): Promise<NotificationPreferences> {

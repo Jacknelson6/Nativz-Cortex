@@ -11,6 +11,7 @@ import { getBrandFromAgency } from '@/lib/agency/detect';
 import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 import { formatPostTimeForChat } from '@/lib/chat/format-post-time';
 import { getClientNotificationSetting } from '@/lib/notifications/get-client-setting';
+import { notifyAdmins } from '@/lib/notifications';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -616,6 +617,293 @@ async function handleEditing(admin: ReturnType<typeof createAdminClient>): Promi
   return { cardsFired, commentsBatched };
 }
 
+/**
+ * Bell-coalesce passes. Mirrors the chat coalesce above but drains the
+ * separate `bell_notified_at` column and fires in-app notifications to
+ * the team via `notifyAdmins` (scoped to assigned members + owners).
+ *
+ * Why a separate column from `chat_notified_at`: chat and bell are
+ * independently configurable per-client (one webhook can be set without
+ * the other, one preference can be off without the other), and we don't
+ * want a chat-skip to also silently swallow the bell ping or vice versa.
+ * Migration 322 added the column.
+ *
+ * Filter: only client-side activity (`author_role != 'admin'`) status =
+ * 'comment'. Admin-authored rows don't ping the admin team's bells
+ * (we already know we commented), and approvals are already covered
+ * by the synchronous 🎉 all-approved single-shot. `video_revised` rows
+ * are written by editors (admin role) so they're also excluded.
+ */
+async function handleCalendarBells(
+  admin: ReturnType<typeof createAdminClient>,
+): Promise<{ batchesFired: number; commentsBatched: number }> {
+  const cutoff = staleCutoffIso();
+  const { data: pending } = await admin
+    .from('post_review_comments')
+    .select(
+      'id, review_link_id, author_role, author_name, content, status, created_at',
+    )
+    .is('bell_notified_at', null)
+    .eq('status', 'comment')
+    .neq('author_role', 'admin')
+    .gte('created_at', cutoff)
+    .order('created_at', { ascending: true });
+
+  const { error: sweepErr } = await admin
+    .from('post_review_comments')
+    .update({ bell_notified_at: new Date().toISOString() })
+    .is('bell_notified_at', null)
+    .eq('status', 'comment')
+    .neq('author_role', 'admin')
+    .lt('created_at', cutoff);
+  if (sweepErr) {
+    console.error('coalesce-review-pings: calendar bell stale-sweep failed', sweepErr);
+  }
+
+  const rows = (pending ?? []) as Array<{
+    id: string;
+    review_link_id: string;
+    author_role: 'viewer' | 'guest';
+    author_name: string;
+    content: string;
+    status: 'comment';
+    created_at: string;
+  }>;
+  if (rows.length === 0) return { batchesFired: 0, commentsBatched: 0 };
+
+  const pendingReviewLinkIds = Array.from(new Set(rows.map((r) => r.review_link_id)));
+  const { data: candidateLinks } = await admin
+    .from('content_drop_share_links')
+    .select('id, drop_id, token, name, post_review_link_map, created_at')
+    .gt('expires_at', new Date().toISOString())
+    .order('created_at', { ascending: false })
+    .limit(500);
+
+  const linkByReviewId = new Map<
+    string,
+    { id: string; drop_id: string; token: string; name: string | null; created_at: string | null }
+  >();
+  for (const link of (candidateLinks ?? []) as Array<{
+    id: string;
+    drop_id: string;
+    token: string;
+    name: string | null;
+    post_review_link_map: Record<string, string> | null;
+    created_at: string | null;
+  }>) {
+    const map = link.post_review_link_map ?? {};
+    for (const reviewLinkId of Object.values(map)) {
+      if (!pendingReviewLinkIds.includes(reviewLinkId)) continue;
+      const existing = linkByReviewId.get(reviewLinkId);
+      const newer =
+        !existing ||
+        (link.created_at &&
+          existing.created_at &&
+          new Date(link.created_at).getTime() >
+            new Date(existing.created_at).getTime());
+      if (newer) {
+        linkByReviewId.set(reviewLinkId, {
+          id: link.id,
+          drop_id: link.drop_id,
+          token: link.token,
+          name: link.name,
+          created_at: link.created_at,
+        });
+      }
+    }
+  }
+
+  const byShareLink = new Map<
+    string,
+    {
+      shareLink: { id: string; drop_id: string; token: string; name: string | null };
+      comments: typeof rows;
+    }
+  >();
+  for (const r of rows) {
+    const link = linkByReviewId.get(r.review_link_id);
+    if (!link) continue;
+    const entry = byShareLink.get(link.id) ?? { shareLink: link, comments: [] };
+    entry.comments.push(r);
+    byShareLink.set(link.id, entry);
+  }
+
+  const now = Date.now();
+  let batchesFired = 0;
+  let commentsBatched = 0;
+
+  for (const [, { shareLink, comments: group }] of byShareLink) {
+    const earliest = new Date(group[0].created_at).getTime();
+    if (now - earliest < QUIET_WINDOW_MS) continue;
+
+    const { data: drop } = await admin
+      .from('content_drops')
+      .select('id, client_id, clients(name)')
+      .eq('id', shareLink.drop_id)
+      .single<{ id: string; client_id: string; clients: { name: string } | null }>();
+    if (!drop) continue;
+
+    const clientName = drop.clients?.name ?? 'Client';
+    const totalNotes = group.length;
+    const authors = Array.from(new Set(group.map((c) => c.author_name))).filter(Boolean);
+    const authorsLabel =
+      authors.length === 0
+        ? 'A client viewer'
+        : authors.length === 1
+          ? authors[0]
+          : authors.length === 2
+            ? `${authors[0]} and ${authors[1]}`
+            : `${authors[0]} and ${authors.length - 1} others`;
+    const title = `${totalNotes} new comment${totalNotes === 1 ? '' : 's'} on ${clientName}`;
+    const linkLabel = shareLink.name?.trim() || 'calendar share link';
+    const body = `${authorsLabel} left feedback on the ${linkLabel}. Open to review.`;
+
+    try {
+      await notifyAdmins({
+        type: 'share_comment_batch',
+        title,
+        body,
+        linkPath: `/admin/calendar/${shareLink.drop_id}`,
+        clientId: drop.client_id,
+      });
+    } catch (err) {
+      console.error('coalesce-review-pings: calendar bell fan-out failed', err);
+      continue;
+    }
+
+    const ids = group.map((c) => c.id);
+    const { error: stampErr } = await admin
+      .from('post_review_comments')
+      .update({ bell_notified_at: new Date().toISOString() })
+      .in('id', ids);
+    if (stampErr) {
+      console.error('coalesce-review-pings: calendar bell stamp failed', stampErr);
+    }
+
+    batchesFired += 1;
+    commentsBatched += group.length;
+  }
+
+  return { batchesFired, commentsBatched };
+}
+
+async function handleEditingBells(
+  admin: ReturnType<typeof createAdminClient>,
+): Promise<{ batchesFired: number; commentsBatched: number }> {
+  const cutoff = staleCutoffIso();
+  const { data: pending } = await admin
+    .from('editing_project_review_comments')
+    .select(
+      'id, share_link_id, project_id, author_role, author_name, content, status, created_at',
+    )
+    .is('bell_notified_at', null)
+    .eq('status', 'comment')
+    .neq('author_role', 'admin')
+    .gte('created_at', cutoff)
+    .order('created_at', { ascending: true });
+
+  const { error: sweepErr } = await admin
+    .from('editing_project_review_comments')
+    .update({ bell_notified_at: new Date().toISOString() })
+    .is('bell_notified_at', null)
+    .eq('status', 'comment')
+    .neq('author_role', 'admin')
+    .lt('created_at', cutoff);
+  if (sweepErr) {
+    console.error('coalesce-review-pings: editing bell stale-sweep failed', sweepErr);
+  }
+
+  const rows = (pending ?? []) as Array<{
+    id: string;
+    share_link_id: string | null;
+    project_id: string;
+    author_role: 'viewer' | 'guest';
+    author_name: string;
+    content: string;
+    status: 'comment';
+    created_at: string;
+  }>;
+  if (rows.length === 0) return { batchesFired: 0, commentsBatched: 0 };
+
+  const byShareLink = new Map<string, typeof rows>();
+  for (const r of rows) {
+    if (!r.share_link_id) continue;
+    const list = byShareLink.get(r.share_link_id) ?? [];
+    list.push(r);
+    byShareLink.set(r.share_link_id, list);
+  }
+
+  const now = Date.now();
+  let batchesFired = 0;
+  let commentsBatched = 0;
+
+  for (const [shareLinkId, group] of byShareLink) {
+    const earliest = new Date(group[0].created_at).getTime();
+    if (now - earliest < QUIET_WINDOW_MS) continue;
+
+    const { data: linkRow } = await admin
+      .from('editing_project_share_links')
+      .select(
+        'id, project_id, editing_projects(id, name, client_id, clients(name))',
+      )
+      .eq('id', shareLinkId)
+      .maybeSingle<{
+        id: string;
+        project_id: string;
+        editing_projects: {
+          id: string;
+          name: string | null;
+          client_id: string;
+          clients: { name: string } | null;
+        } | null;
+      }>();
+    if (!linkRow?.editing_projects) continue;
+
+    const project = linkRow.editing_projects;
+    const clientName = project.clients?.name ?? 'Client';
+    const projectName = project.name?.trim() || 'Editing project';
+    const totalNotes = group.length;
+    const authors = Array.from(new Set(group.map((c) => c.author_name))).filter(Boolean);
+    const authorsLabel =
+      authors.length === 0
+        ? 'A client viewer'
+        : authors.length === 1
+          ? authors[0]
+          : authors.length === 2
+            ? `${authors[0]} and ${authors[1]}`
+            : `${authors[0]} and ${authors.length - 1} others`;
+    const title = `${totalNotes} new comment${totalNotes === 1 ? '' : 's'} on ${clientName}`;
+    const body = `${authorsLabel} left feedback on ${projectName}. Open to review.`;
+
+    try {
+      await notifyAdmins({
+        type: 'share_comment_batch',
+        title,
+        body,
+        linkPath: `/admin/editing/projects/${project.id}`,
+        clientId: project.client_id,
+      });
+    } catch (err) {
+      console.error('coalesce-review-pings: editing bell fan-out failed', err);
+      continue;
+    }
+
+    const ids = group.map((c) => c.id);
+    const { error: stampErr } = await admin
+      .from('editing_project_review_comments')
+      .update({ bell_notified_at: new Date().toISOString() })
+      .in('id', ids);
+    if (stampErr) {
+      console.error('coalesce-review-pings: editing bell stamp failed', stampErr);
+    }
+
+    batchesFired += 1;
+    commentsBatched += group.length;
+  }
+
+  return { batchesFired, commentsBatched };
+}
+
 async function handleGet(request: NextRequest) {
   const authHeader = request.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET;
@@ -624,9 +912,11 @@ async function handleGet(request: NextRequest) {
   }
 
   const admin = createAdminClient();
-  const [calendar, editing] = await Promise.all([
+  const [calendar, editing, calendarBells, editingBells] = await Promise.all([
     handleCalendar(admin),
     handleEditing(admin),
+    handleCalendarBells(admin),
+    handleEditingBells(admin),
   ]);
 
   return NextResponse.json({
@@ -634,6 +924,10 @@ async function handleGet(request: NextRequest) {
     calendar_comments: calendar.commentsBatched,
     editing_cards: editing.cardsFired,
     editing_comments: editing.commentsBatched,
+    calendar_bell_batches: calendarBells.batchesFired,
+    calendar_bell_comments: calendarBells.commentsBatched,
+    editing_bell_batches: editingBells.batchesFired,
+    editing_bell_comments: editingBells.commentsBatched,
   });
 }
 
@@ -644,9 +938,16 @@ export const GET = withCronTelemetry(
       const b = body as {
         calendar_comments?: number;
         editing_comments?: number;
+        calendar_bell_comments?: number;
+        editing_bell_comments?: number;
       } | null;
       if (!b) return undefined;
-      return (b.calendar_comments ?? 0) + (b.editing_comments ?? 0);
+      return (
+        (b.calendar_comments ?? 0) +
+        (b.editing_comments ?? 0) +
+        (b.calendar_bell_comments ?? 0) +
+        (b.editing_bell_comments ?? 0)
+      );
     },
   },
   handleGet,

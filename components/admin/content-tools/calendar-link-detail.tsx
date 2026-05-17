@@ -319,10 +319,10 @@ export function CalendarLinkDetail({
   const [renderMode, setRenderMode] = useState<'edit' | 'preview'>('edit');
 
   // Archived email touchpoints. Lazily loaded on dialog open from the
-  // `share_link_emails` table — populated by the writer wired into the
-  // send/followup/notify-revisions routes. The sub-dialog renders a
-  // single archived row's stored HTML body so the modal can replay
-  // exactly what the recipient saw.
+  // `share_link_emails` table, populated by the writer wired into the
+  // send + followup routes. The sub-dialog renders a single archived
+  // row's stored HTML body so the modal can replay exactly what the
+  // recipient saw.
   const [archivedEmails, setArchivedEmails] = useState<ArchivedEmail[] | null>(null);
   const [archivedLoading, setArchivedLoading] = useState(false);
   const [viewingEmail, setViewingEmail] = useState<ArchivedEmail | null>(null);
