@@ -113,10 +113,9 @@ interface ShareLinkRow {
   view_count: number;
   pending_revision_count: number;
   kind: SendVariant;
-  revisions_status: 'none' | 'unresolved' | 'ready_to_send' | 'sent';
+  revisions_status: 'none' | 'has_comments';
   revisions_total: number;
   revisions_unresolved: number;
-  revisions_complete_notified_at: string | null;
 }
 
 interface SendPreview {
@@ -726,7 +725,7 @@ export function EditingProjectDetail({
       : null;
 
   const showRevisionsCta =
-    activeLink?.revisions_status === 'ready_to_send' && !sendDisabledReason;
+    activeLink?.revisions_status === 'has_comments' && !sendDisabledReason;
   const hasBeenSent = !!activeLink?.last_review_email_sent_at;
   // Project is in a terminal approved state — hide the Send re-review /
   // revisions-complete CTAs so we don't burn an email on a closed loop.
@@ -1043,13 +1042,10 @@ export function EditingProjectDetail({
                       · {activeLink.pending_revision_count} new {activeLink.pending_revision_count === 1 ? 'revision' : 'revisions'} since last send
                     </span>
                   )}
-                  {activeLink.revisions_status === 'unresolved' && (
+                  {activeLink.revisions_status === 'has_comments' && (
                     <span className="text-status-warning">
-                      · {activeLink.revisions_unresolved} unresolved {activeLink.revisions_unresolved === 1 ? 'revision' : 'revisions'}
+                      · {activeLink.revisions_unresolved} open {activeLink.revisions_unresolved === 1 ? 'comment' : 'comments'}
                     </span>
-                  )}
-                  {activeLink.revisions_status === 'sent' && (
-                    <span className="text-status-success">· Revisions-complete sent</span>
                   )}
                 </div>
               </div>
@@ -1289,7 +1285,7 @@ function ReviewCounters({ videos }: { videos: EditingProjectVideo[] }) {
   let pending = 0;
   for (const v of videos) {
     if (v.review_status === 'approved') approved += 1;
-    else if (v.review_status === 'changes_requested') changes += 1;
+    else if (v.review_status === 'revising') changes += 1;
     else pending += 1;
   }
   return (

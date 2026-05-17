@@ -6,7 +6,7 @@ const CommentSchema = z.object({
   review_link_id: z.string().uuid(),
   author_name: z.string().min(1).default('Anonymous'),
   content: z.string().min(1),
-  status: z.enum(['approved', 'changes_requested', 'comment']).default('comment'),
+  status: z.enum(['approved', 'comment']).default('comment'),
 });
 
 /**
@@ -20,7 +20,7 @@ const CommentSchema = z.object({
  * @body review_link_id - Post review link UUID (required)
  * @body author_name - Commenter name (default 'Anonymous')
  * @body content - Comment text (required)
- * @body status - 'approved' | 'changes_requested' | 'comment' (default 'comment')
+ * @body status - 'approved' | 'comment' (default 'comment')
  * @returns {{ comment: PostReviewComment }}
  */
 export async function POST(request: NextRequest) {

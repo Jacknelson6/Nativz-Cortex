@@ -272,7 +272,7 @@ function VideoCard({
               <CheckCircle2 size={10} /> Approved
             </span>
           )}
-          {status === 'changes_requested' && (
+          {status === 'revising' && (
             <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-400">
               Needs changes
             </span>

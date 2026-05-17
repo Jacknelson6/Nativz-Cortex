@@ -34,7 +34,6 @@ interface CommentAttachment {
 
 type CommentStatus =
   | 'approved'
-  | 'changes_requested'
   | 'comment'
   | 'video_revised';
 
@@ -48,7 +47,6 @@ interface CommentRow {
   content: string;
   status: CommentStatus;
   kind: string | null;
-  resolved_at: string | null;
   parent_comment_id: string | null;
   attachments: CommentAttachment[] | null;
   metadata: Record<string, unknown> | null;
@@ -132,7 +130,7 @@ export async function GET(
       admin
         .from('editing_project_review_comments')
         .select(
-          'id, video_id, share_link_id, author_name, author_user_id, author_role, content, status, kind, resolved_at, parent_comment_id, attachments, metadata, timestamp_seconds, created_at',
+          'id, video_id, share_link_id, author_name, author_user_id, author_role, content, status, kind, parent_comment_id, attachments, metadata, timestamp_seconds, created_at',
         )
         .eq('project_id', link.project_id)
         .order('created_at', { ascending: true }),

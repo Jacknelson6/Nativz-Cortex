@@ -104,10 +104,10 @@ interface CommentAttachment {
 
 type CommentStatus =
   | 'approved'
-  | 'changes_requested'
   | 'comment'
   | 'caption_edit'
   | 'tag_edit'
+  | 'cover_edit'
   | 'schedule_change'
   | 'video_revised';
 
@@ -119,7 +119,6 @@ interface CommentRow {
   content: string;
   status: CommentStatus;
   kind: string | null;
-  resolved_at: string | null;
   created_at: string;
   attachments: CommentAttachment[] | null;
   caption_before: string | null;
@@ -363,7 +362,7 @@ async function handleShareGet(
   const { data: comments } = reviewLinkIds.length
     ? await admin
         .from('post_review_comments')
-        .select('id, review_link_id, author_name, author_role, content, status, kind, resolved_at, created_at, attachments, caption_before, caption_after, metadata, timestamp_seconds, parent_comment_id')
+        .select('id, review_link_id, author_name, author_role, content, status, kind, created_at, attachments, caption_before, caption_after, metadata, timestamp_seconds, parent_comment_id')
         .in('review_link_id', reviewLinkIds)
         .order('created_at', { ascending: true })
     : { data: [] as CommentRow[] };
@@ -499,7 +498,6 @@ async function handleShareGet(
           content: c.content,
           status: c.status,
           kind: c.kind ?? null,
-          resolved_at: c.resolved_at ?? null,
           created_at: c.created_at,
           attachments: c.attachments ?? [],
           caption_before: c.caption_before,

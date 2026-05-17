@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import {
-  AlertTriangle,
   CheckCircle2,
   Eye,
   Film,
@@ -95,7 +94,7 @@ export type ShareHistoryEvent =
       at: string;
       detail: {
         author_name: string;
-        status: 'approved' | 'changes_requested' | 'comment' | 'video_revised';
+        status: 'approved' | 'comment' | 'video_revised';
         content: string;
         video_id: string | null;
         attachment_count: number;
@@ -400,7 +399,7 @@ function emailVerb({
   return 'Notification sent';
 }
 
-function reviewSwatch(status: 'approved' | 'changes_requested' | 'comment' | 'video_revised'): {
+function reviewSwatch(status: 'approved' | 'comment' | 'video_revised'): {
   cls: string;
   icon: React.ReactNode;
 } {
@@ -408,12 +407,6 @@ function reviewSwatch(status: 'approved' | 'changes_requested' | 'comment' | 'vi
     return {
       cls: 'bg-emerald-500/10 text-emerald-400',
       icon: <CheckCircle2 size={13} />,
-    };
-  }
-  if (status === 'changes_requested') {
-    return {
-      cls: 'bg-amber-500/10 text-amber-400',
-      icon: <AlertTriangle size={13} />,
     };
   }
   if (status === 'video_revised') {
@@ -429,13 +422,12 @@ function reviewSwatch(status: 'approved' | 'changes_requested' | 'comment' | 'vi
 }
 
 function reviewVerb(
-  status: 'approved' | 'changes_requested' | 'comment' | 'video_revised',
+  status: 'approved' | 'comment' | 'video_revised',
   author: string,
   nounSingular: string,
 ): string {
   const article = /^[aeiou]/i.test(nounSingular) ? 'an' : 'a';
   if (status === 'approved') return `${author} approved ${article} ${nounSingular}`;
-  if (status === 'changes_requested') return `${author} requested changes`;
   if (status === 'video_revised')
     return `${author} uploaded a revised ${nounSingular}`;
   return `${author} left a comment`;

@@ -60,7 +60,7 @@ type Activity =
       at: string;
       detail: {
         author_name: string;
-        status: 'approved' | 'changes_requested' | 'comment' | 'video_revised';
+        status: 'approved' | 'comment' | 'video_revised';
         content: string;
         video_id: string | null;
         attachment_count: number;
@@ -216,7 +216,7 @@ export async function GET(
     video_id: string | null;
     author_name: string | null;
     content: string | null;
-    status: 'approved' | 'changes_requested' | 'comment' | 'video_revised';
+    status: 'approved' | 'comment' | 'video_revised';
     attachments: unknown;
     created_at: string;
   };

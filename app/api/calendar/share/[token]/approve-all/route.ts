@@ -4,11 +4,9 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { isAdmin } from '@/lib/auth/permissions';
 import { publishScheduledPost } from '@/lib/calendar/schedule-drop';
 import { reschedulePastDueDrafts } from '@/lib/calendar/reschedule-past-due';
-import { consumeForApproval } from '@/lib/credits/comment-hooks';
 import {
   findContentCalendarItem,
   groupTitleForCalendarStart,
-  syncMondayApprovalForDrop,
 } from '@/lib/monday/calendar-approval';
 import { isMondayConfigured } from '@/lib/monday/client';
 import {
@@ -31,10 +29,8 @@ import { getCortexAppUrl } from '@/lib/agency/cortex-url';
  * Per post the pipeline matches the per-comment route:
  *   1. Insert an `approved` row in `post_review_comments`.
  *   2. Call `publishScheduledPost` (idempotent: re-runs are a no-op).
- *   3. Call `consumeForApproval` for credit accounting (state-based dedup).
  *
  * After the per-post loop, runs the drop-level work once via `after()`:
- *   - Monday calendar approval sync (state-derived)
  *   - Atomic all-approved claim → 🎉 chat ping if won
  *   - Paid-media team ping (if applicable)
  *
@@ -53,25 +49,24 @@ interface CommentRow {
   review_link_id: string;
   status: string;
   created_at: string;
-  metadata: Record<string, unknown> | null;
 }
 
-type LiveStatus = 'approved' | 'changes_requested' | null;
+type LiveStatus = 'approved' | 'revising' | null;
 
 /**
  * Server-side mirror of the public share page's `latestReview` walk.
- * Newest → oldest, skipping `changes_requested` rows whose metadata is
- * marked resolved. First live signal wins. Returns null when nothing is
- * live (pending).
+ * Newest first: an approval row terminates and wins; any non-approval
+ * `comment` after the last approval signals revising. Returns null when
+ * no comments exist (pending).
+ *
+ * Activity-event statuses (caption_edit, schedule_change, video_revised,
+ * etc.) are not lifecycle signals, they're skipped.
  */
 function latestLiveStatus(comments: CommentRow[]): LiveStatus {
   for (let i = comments.length - 1; i >= 0; i--) {
     const c = comments[i];
     if (c.status === 'approved') return 'approved';
-    if (c.status === 'changes_requested') {
-      const resolved = !!(c.metadata && (c.metadata as Record<string, unknown>).resolved);
-      if (!resolved) return 'changes_requested';
-    }
+    if (c.status === 'comment') return 'revising';
   }
   return null;
 }
@@ -228,7 +223,7 @@ export async function POST(
   // already approved (and therefore skip-targets).
   const { data: existingComments } = await admin
     .from('post_review_comments')
-    .select('review_link_id, status, created_at, metadata')
+    .select('review_link_id, status, created_at')
     .in('review_link_id', reviewLinkIds)
     .order('created_at', { ascending: true });
 
@@ -333,19 +328,6 @@ export async function POST(
       console.error(`Bulk approve → Zernio publish failed for post ${postId}:`, err);
     }
 
-    // Approval-as-consumption. State-based dedup makes this safe even if
-    // the post was previously approved → un-approved → re-approved.
-    try {
-      await consumeForApproval(admin, {
-        scheduledPostId: postId,
-        shareLinkId: link.id,
-        reviewerName,
-        reviewLinkId,
-      });
-    } catch (err) {
-      console.error(`Bulk approve credit consume failed for post ${postId}:`, err);
-    }
-
     approved += 1;
   }
 
@@ -354,7 +336,7 @@ export async function POST(
   // walk the same latestLiveStatus to derive approved/changes/pending.
   const { data: refreshed } = await admin
     .from('post_review_comments')
-    .select('review_link_id, status, created_at, metadata')
+    .select('review_link_id, status, created_at')
     .in('review_link_id', reviewLinkIds)
     .order('created_at', { ascending: true });
 
@@ -370,7 +352,7 @@ export async function POST(
   for (const [, reviewLinkId] of reviewLinkEntries) {
     const status = latestLiveStatus(refreshedByReviewLink.get(reviewLinkId) ?? []);
     if (status === 'approved') approvedCount += 1;
-    else if (status === 'changes_requested') changesCount += 1;
+    else if (status === 'revising') changesCount += 1;
   }
   const pendingCount = reviewLinkEntries.length - approvedCount - changesCount;
 
@@ -384,15 +366,10 @@ export async function POST(
         ? 'revising'
         : 'ready_for_review';
 
-  // Drop-level post-response work. Collapsed into one Monday sync + one
-  // chat ping for the whole batch instead of running per post.
+  // Drop-level post-response work. One past-due notify + one all-approved
+  // chat ping for the whole batch instead of running per post. Monday
+  // writeback was retired with migration 322.
   after(async () => {
-    try {
-      await syncMondayApprovalForDrop(admin, link.drop_id);
-    } catch (err) {
-      console.error('Monday sync after bulk approve failed:', err);
-    }
-
     // Past-due fixup notification (Jack-only, per the client's chat webhook).
     // We never tell the client we moved their posts — Jack handles that out-of-band.
     if (pastDue.moves.length > 0 || pastDue.overflow.length > 0) {

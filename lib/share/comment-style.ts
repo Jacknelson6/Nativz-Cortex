@@ -25,7 +25,6 @@ import {
 
 export type ShareCommentStatus =
   | 'approved'
-  | 'changes_requested'
   | 'comment'
   | 'video_revised'
   | 'caption_edit'
@@ -41,27 +40,13 @@ export interface CommentStyle {
 
 export function resolveCommentStyle(
   status: ShareCommentStatus | string,
-  opts: { resolved?: boolean } = {},
 ): CommentStyle {
-  if (opts.resolved) {
-    return {
-      tone: 'text-status-success',
-      Icon: CheckCircle,
-      label: 'Revised',
-    };
-  }
   switch (status) {
     case 'approved':
       return {
         tone: 'text-status-success',
         Icon: CheckCircle,
         label: 'Approved',
-      };
-    case 'changes_requested':
-      return {
-        tone: 'text-status-warning',
-        Icon: AlertTriangle,
-        label: 'Revision requested',
       };
     case 'video_revised':
       return {

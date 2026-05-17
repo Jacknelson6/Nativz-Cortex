@@ -54,7 +54,6 @@ interface CommentAttachment {
 
 type SharedCommentStatus =
   | 'approved'
-  | 'changes_requested'
   | 'comment'
   | 'caption_edit'
   | 'tag_edit'
@@ -171,7 +170,7 @@ interface SharedDrop {
   supportEmail: string;
 }
 
-type ReviewStatus = 'approved' | 'changes_requested' | 'comment';
+type ReviewStatus = 'approved' | 'revising' | null;
 type ViewMode = 'list' | 'calendar';
 
 export default function PublicCalendarSharePage({
@@ -425,7 +424,7 @@ function SharedDropView({
 
   const total = data.posts.length;
   const approvedCount = data.posts.filter((p) => latestReview(p.comments) === 'approved').length;
-  const changesCount = data.posts.filter((p) => latestReview(p.comments) === 'changes_requested').length;
+  const changesCount = data.posts.filter((p) => latestReview(p.comments) === 'revising').length;
   const unapprovedPosts = useMemo(
     () => data.posts.filter((p) => latestReview(p.comments) !== 'approved'),
     [data.posts],
@@ -1419,20 +1418,21 @@ function ShareHeaderLogo() {
   );
 }
 
-function latestReview(comments: SharedComment[]): ReviewStatus | null {
-  // Walk newest → oldest and return the first "live" review signal. A
-  // changes_requested row that's been marked Revised (metadata.resolved)
-  // is no longer live, we skip past it so the pill can fall through to
-  // an earlier approval, or disappear entirely if every revision has
-  // been handled. This is what makes the header pill clear once an
-  // editor checks Revised on the change-request thread.
+function latestReview(comments: SharedComment[]): ReviewStatus {
+  // Walk newest to oldest. Hit 'approved' first: approved. Hit 'comment'
+  // before any approval (or no approval ever): revising. Activity-event
+  // statuses (caption_edit, tag_edit, cover_edit, schedule_change,
+  // video_revised) are skipped since they don't affect approval state.
+  const ACTIVITY = new Set(['caption_edit', 'tag_edit', 'cover_edit', 'schedule_change', 'video_revised']);
+  let lastApprovalIdx = -1;
+  for (let i = comments.length - 1; i >= 0; i--) {
+    if (comments[i].status === 'approved') { lastApprovalIdx = i; break; }
+  }
   for (let i = comments.length - 1; i >= 0; i--) {
     const c = comments[i];
+    if (ACTIVITY.has(c.status)) continue;
     if (c.status === 'approved') return 'approved';
-    if (c.status === 'changes_requested') {
-      const resolved = !!(c.metadata && (c.metadata as Record<string, unknown>).resolved);
-      if (!resolved) return 'changes_requested';
-    }
+    if (c.status === 'comment' && i > lastApprovalIdx) return 'revising';
   }
   return null;
 }
@@ -2187,7 +2187,7 @@ function CalendarCell({
               <CheckCircle size={10} className="text-accent-contrast" />
             </span>
           )}
-          {review === 'changes_requested' && (
+          {review === 'revising' && (
             <span className="absolute right-1 top-1 rounded-full bg-status-warning p-0.5">
               <AlertTriangle size={10} className="text-accent-contrast" />
             </span>
@@ -2426,9 +2426,6 @@ function PostCard({
   // the card calm (most posts get one decision, not a long thread) and
   // matches the "talk only when you need to" Frame.io feel.
   const [composerExpanded, setComposerExpanded] = useState(false);
-  // PRD 01: composer defaults to plain feedback. Reviewer opts into "revision"
-  // explicitly when the note represents a change request, clears the legacy
-  // bug where every Send button submitted changes_requested.
   const [markAsRevision, setMarkAsRevision] = useState(false);
   // Editor-only "remove from calendar" confirmation. We don't auto-fire the
   // delete on click, destructive enough to warrant a one-step "are you
@@ -2578,13 +2575,9 @@ function PostCard({
     }
   }
 
-  async function submit(status: ReviewStatus) {
+  async function submit(status: SharedCommentStatus) {
     if (!authorName.trim()) {
       requireName();
-      return;
-    }
-    if (status === 'changes_requested' && !commentText.trim() && pendingAttachments.length === 0) {
-      toast.error('Please enter revision notes or attach a file');
       return;
     }
     if (status === 'comment' && !commentText.trim() && pendingAttachments.length === 0) {
@@ -2593,10 +2586,9 @@ function PostCard({
     }
 
     // Optimistic flow: paint a temp comment into the parent immediately so
-    // the approve / changes_requested chip flips state without waiting on
-    // the round trip. On success we swap the temp row for the real one; on
-    // failure we yank the temp row and surface the error. Keeps the UI
-    // responsive on slow networks while still reconciling with the server.
+    // the approval chip flips state without waiting on the round trip. On
+    // success we swap the temp row for the real one; on failure we yank the
+    // temp row and surface the error.
     const tempId = `temp-${
       typeof crypto !== 'undefined' && 'randomUUID' in crypto
         ? crypto.randomUUID()
@@ -2617,9 +2609,6 @@ function PostCard({
       // once the real row replaces the temp on success.
       author_role: 'guest',
       content: resolvedContent,
-      // Reflect the user's intent locally; the server may auto-upgrade
-      // changes_requested → approved on its side, which we reconcile when
-      // the real comment lands.
       status,
       created_at: new Date().toISOString(),
       attachments: snapshotAttachments,
@@ -2638,14 +2627,8 @@ function PostCard({
     setPinEnabled(true);
     setComposerExpanded(false);
     setMarkAsRevision(false);
-    // Optimistic toast. The server may auto-upgrade changes_requested →
-    // approved; we patch the toast in the success branch if that happens.
     const optimisticToastId = toast.success(
-      status === 'approved'
-        ? 'Post approved'
-        : status === 'changes_requested'
-          ? 'Revision added'
-          : 'Comment added',
+      status === 'approved' ? 'Post approved' : 'Comment added',
     );
 
     setSubmitting(true);
@@ -2659,9 +2642,6 @@ function PostCard({
           content: resolvedContent,
           status,
           attachments: snapshotAttachments,
-          // Server only honors this for `comment` / `changes_requested`; the
-          // approval path strips it. Sending unconditionally keeps the
-          // client free of duplicate "should I include this?" branching.
           timestampSeconds: anchorSeconds,
         }),
       });
@@ -2683,7 +2663,7 @@ function PostCard({
       // submit; that matches the "fresh draft" intent if they retry.
       setCommentText(resolvedContent === 'Approved' ? '' : resolvedContent);
       setPendingAttachments(snapshotAttachments);
-      if (status === 'changes_requested') setComposerExpanded(true);
+      if (status === 'comment') setComposerExpanded(true);
     } finally {
       setSubmitting(false);
     }
@@ -3064,7 +3044,7 @@ function PostCard({
             <CheckCircle size={13} /> Approved
           </span>
         )}
-        {review === 'changes_requested' && (
+        {review === 'revising' && (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-status-warning/12 px-3 py-1.5 text-sm font-medium text-status-warning ring-1 ring-status-warning/30">
             <AlertTriangle size={13} /> Revision requested
           </span>
@@ -3440,8 +3420,7 @@ function PostCard({
               )
             )}
             <div className="ml-auto flex items-center gap-1">
-              {/* PRD 01: revision toggle. Default is plain feedback ("comment");
-                  flipping promotes the submit to changes_requested. */}
+              {/* Revision toggle. Visual-only toggle, all comments submit as 'comment'. */}
               <button
                 type="button"
                 onClick={() => setMarkAsRevision((v) => !v)}
@@ -3472,7 +3451,7 @@ function PostCard({
               </button>
               <button
                 type="button"
-                onClick={() => submit(markAsRevision ? 'changes_requested' : 'comment')}
+                onClick={() => submit('comment')}
                 disabled={submitting || uploading || (!commentText.trim() && pendingAttachments.length === 0)}
                 className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-[color:var(--accent-contrast)] shadow-[var(--shadow-card)] transition-all hover:bg-accent-hover hover:shadow-[var(--shadow-card-hover)] active:scale-[0.98] disabled:opacity-50 disabled:hover:bg-accent"
               >
@@ -3836,38 +3815,11 @@ function CommentRow({
     }
   }
   const [deleting, setDeleting] = useState(false);
-  const [resolving, setResolving] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [dontAsk, setDontAsk] = useState(false);
-  // metadata.resolved is the editor-set "this revision was handled" flag.
-  // Stored in metadata (not a status flip) so the audit thread still groups
-  // with other change-request rows but the icon/copy switch to a green check.
-  const isResolved =
-    comment.status === 'changes_requested' &&
-    !!(comment.metadata && (comment.metadata as Record<string, unknown>).resolved);
   // Auto-approval inference was removed 2026-05-14. Old rows with
   // `metadata.auto_approved` are still rendered as plain approvals; the
   // flag no longer surfaces a separate label.
-
-  async function toggleResolved() {
-    if (resolving) return;
-    setResolving(true);
-    try {
-      const res = await fetch(`/api/calendar/share/${token}/comment`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ commentId: comment.id, resolved: !isResolved }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'Failed to update');
-      onUpdated(json.comment as SharedComment);
-      toast.success(!isResolved ? 'Marked as revised' : 'Reopened revision');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update');
-    } finally {
-      setResolving(false);
-    }
-  }
 
   function requestDelete() {
     if (deleting) return;
@@ -3956,41 +3908,9 @@ function CommentRow({
     );
   }
 
-  // Editor-only "Revised" toggle on a change-request row. The label is the
-  // same in both states ("Revised"), what changes is the styling: success
-  // chip when resolved, neutral outline when still outstanding. Visible
-  // always (not just on hover) so editors can scan the history and see
-  // what's still on their plate.
-  const resolveButton =
-    comment.status === 'changes_requested' && isEditor ? (
-      <button
-        type="button"
-        onClick={toggleResolved}
-        disabled={resolving}
-        aria-label={isResolved ? 'Reopen revision' : 'Mark as revised'}
-        aria-pressed={isResolved}
-        className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
-          isResolved
-            ? 'bg-status-success/12 text-status-success ring-1 ring-status-success/30 hover:bg-status-success/20'
-            : 'bg-surface text-text-secondary ring-1 ring-nativz-border hover:bg-status-success/10 hover:text-status-success hover:ring-status-success/40'
-        }`}
-        title={isResolved ? 'Click to reopen this revision' : 'Click when this revision is done'}
-      >
-        {resolving ? (
-          <Loader2 size={11} className="animate-spin" />
-        ) : (
-          <CheckCircle size={11} />
-        )}
-        Revised
-      </button>
-    ) : null;
+  const resolveButton = null;
 
-  // Single hover-revealed X in the top-right corner of every history row,
-  // including changes_requested. Earlier we duplicated this control with a
-  // labelled "✕ Remove" pill in the footer, but the visual weight competed
-  // with Revised and made the row look like it had two equal CTAs. The
-  // hover-X matches every other status row's chrome, one consistent
-  // delete affordance, no double-button layout.
+  // Single hover-revealed X in the top-right corner of every history row.
   const headerDeleteButton = (
     <button
       type="button"
@@ -4003,7 +3923,7 @@ function CommentRow({
     </button>
   );
 
-  const { tone, Icon } = resolveCommentStyle(comment.status, { resolved: isResolved });
+  const { tone, Icon } = resolveCommentStyle(comment.status);
   const time = new Date(comment.created_at).toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',
@@ -4085,29 +4005,15 @@ function CommentRow({
     );
   }
 
-  // Default branch covers `comment`, `approved`, and `changes_requested`. The
-  // last one is the row that gets the resolveButton + green tint when an
-  // editor marks it done, visible to the client too so they know the revision
-  // landed.
-  const containerClass =
-    isResolved
-      ? 'group rounded-lg border border-status-success/30 bg-status-success/5 px-3 py-2'
-      : comment.status === 'changes_requested'
-        ? 'group rounded-lg border border-status-warning/30 bg-status-warning/5 px-3 py-2'
-        : 'group rounded-lg border border-nativz-border bg-surface px-3 py-2';
-  const trailingMeta = isResolved ? 'marked revised · ' : '';
-  // changes_requested rows get a persistent footer with Mark revised + Remove
-  // pinned to the bottom, editors don't have to hover to act on the row that
-  // matters most. Other rows (comment / approved) keep the lighter
-  // hover-revealed delete button in the header.
-  const isChangesRequestedRow = comment.status === 'changes_requested';
-  // Timestamp pill, only renders on `comment` / `changes_requested` rows
-  // since approval rows aren't anchored. When an `onSeek` callback is wired
-  // (modal view with a live player), the pill is clickable and jumps the
-  // playhead; otherwise it's a static label.
+  const containerClass = 'group rounded-lg border border-nativz-border bg-surface px-3 py-2';
+  const trailingMeta = '';
+  // Timestamp pill, only renders on `comment` rows since approval rows aren't
+  // anchored. When an `onSeek` callback is wired (modal view with a live
+  // player), the pill is clickable and jumps the playhead; otherwise it's a
+  // static label.
   const timestampPill =
     comment.timestamp_seconds !== null &&
-    (comment.status === 'comment' || comment.status === 'changes_requested') ? (
+    comment.status === 'comment' ? (
       <button
         type="button"
         onClick={onSeek ? () => onSeek(comment.timestamp_seconds as number) : undefined}
@@ -4125,9 +4031,7 @@ function CommentRow({
       </button>
     ) : null;
   // NAT-73: reply gate, only top-level `comment` rows get the affordance.
-  // Replies-to-replies are disallowed (one level of nesting), and approval /
-  // changes_requested rows aren't threadable surfaces (their "reply" is
-  // either the auto-close or a fresh top-level comment).
+  // Replies-to-replies are disallowed (one level of nesting).
   const canReply =
     !isReply &&
     comment.status === 'comment' &&
@@ -4219,13 +4123,6 @@ function CommentRow({
                 Reply
               </button>
             </div>
-          </div>
-        )}
-        {isChangesRequestedRow && (
-          // Footer keeps only Revised, the destructive Remove now lives as
-          // the hover-X in the header so this row matches every other one.
-          <div className="mt-2 flex items-center justify-end border-t border-nativz-border/60 pt-2">
-            {resolveButton}
           </div>
         )}
       </div>

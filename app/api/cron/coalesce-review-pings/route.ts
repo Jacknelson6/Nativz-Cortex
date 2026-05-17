@@ -27,8 +27,8 @@ export const maxDuration = 60;
  *
  * Flow:
  *   1. Insert leaves `chat_notified_at` NULL on each comment.
- *   2. This cron (every 5 min) groups un-notified `comment` /
- *      `changes_requested` rows per share-link. On the editing side it
+ *   2. This cron (every 5 min) groups un-notified `comment` rows per
+ *      share-link. On the editing side it
  *      also batches `approved` (client rapid-fire approvals) and
  *      `video_revised` (editor re-upload audit rows from
  *      `/api/admin/editing/projects/:id/videos`).
@@ -68,12 +68,8 @@ type CalendarPending = {
   review_link_id: string;
   author_name: string;
   content: string;
-  status: 'comment' | 'changes_requested';
+  status: 'comment';
   attachments: Array<{ url: string; filename: string }> | null;
-  // NAT-73: reply rows (parent_comment_id != null) are conversation, not
-  // revisions. We still batch them into the share-link card so the team
-  // sees the back-and-forth, but the verb / emoji / header copy must
-  // never treat them as change requests.
   parent_comment_id: string | null;
   created_at: string;
   post_review_links: {
@@ -91,7 +87,7 @@ type EditingPending = {
   project_id: string;
   author_name: string;
   content: string;
-  status: 'comment' | 'changes_requested' | 'approved' | 'video_revised';
+  status: 'comment' | 'approved' | 'video_revised';
   attachments: Array<{ url: string; filename: string }> | null;
   video_id: string | null;
   created_at: string;
@@ -110,13 +106,11 @@ function previewLine(c: {
   const isReply = !!c.parent_comment_id;
   const verb = isReply
     ? 'replied'
-    : c.status === 'changes_requested'
-      ? 'requested changes'
-      : c.status === 'approved'
-        ? 'approved'
-        : c.status === 'video_revised'
-          ? 're-uploaded a revised cut'
-          : 'commented';
+    : c.status === 'approved'
+      ? 'approved'
+      : c.status === 'video_revised'
+        ? 're-uploaded a revised cut'
+        : 'commented';
   const trimmed = c.content.trim();
   const attachmentCount = (c.attachments ?? []).length;
   const fallback =
@@ -142,7 +136,7 @@ async function handleCalendar(admin: ReturnType<typeof createAdminClient>): Prom
       'id, review_link_id, author_name, content, status, attachments, parent_comment_id, created_at, post_review_links!inner(post_id, scheduled_posts!inner(id, scheduled_at))',
     )
     .is('chat_notified_at', null)
-    .in('status', ['comment', 'changes_requested'])
+    .in('status', ['comment'])
     .gte('created_at', cutoff)
     .order('created_at', { ascending: true });
 
@@ -154,7 +148,7 @@ async function handleCalendar(admin: ReturnType<typeof createAdminClient>): Prom
     .from('post_review_comments')
     .update({ chat_notified_at: new Date().toISOString() })
     .is('chat_notified_at', null)
-    .in('status', ['comment', 'changes_requested'])
+    .in('status', ['comment'])
     .lt('created_at', cutoff);
   if (sweepErr) {
     console.error('coalesce-review-pings: calendar stale-sweep failed', sweepErr);
@@ -329,21 +323,13 @@ async function handleCalendar(admin: ReturnType<typeof createAdminClient>): Prom
       filled: true,
     });
 
-    // Header flavour mirrors the editing bundler: avoid the ✏️ "revision"
-    // shorthand when the batch is purely conversation. A change request
-    // anywhere in the group keeps the pencil so urgent items don't hide
-    // behind softer copy.
     const totalNotes = group.length;
-    const hasChangeRequest = group.some((c) => c.status === 'changes_requested');
     const allReplies = group.every((c) => !!c.parent_comment_id);
-    let headerEmoji = '✏️';
-    let headerNoun = `new note${totalNotes === 1 ? '' : 's'}`;
+    let headerEmoji = '💬';
+    let headerNoun = `new comment${totalNotes === 1 ? '' : 's'}`;
     if (allReplies) {
       headerEmoji = '↩️';
       headerNoun = `repl${totalNotes === 1 ? 'y' : 'ies'}`;
-    } else if (!hasChangeRequest) {
-      headerEmoji = '💬';
-      headerNoun = `new comment${totalNotes === 1 ? '' : 's'}`;
     }
     const headerTitle = `${headerEmoji} ${totalNotes} ${headerNoun} on ${clientName}`;
     const headerSubtitle = shareLink.name?.trim() || 'Calendar share link';
@@ -404,7 +390,6 @@ async function handleEditing(admin: ReturnType<typeof createAdminClient>): Promi
   // button: editing share links don't have a batch email flow.
   const PENDING_STATUSES = [
     'comment',
-    'changes_requested',
     'approved',
     'video_revised',
   ];

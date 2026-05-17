@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { CheckCircle, AlertCircle, MessageSquare, Send } from 'lucide-react';
+import { CheckCircle, AlertCircle, MessageSquare } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -20,7 +20,7 @@ interface ReviewComment {
   id: string;
   author_name: string;
   content: string;
-  status: 'approved' | 'changes_requested' | 'comment';
+  status: 'approved' | 'comment';
   created_at: string;
 }
 
@@ -65,7 +65,7 @@ export default function SharedPostReviewPage({
     fetchReview();
   }, [token]);
 
-  async function handleSubmit(status: 'approved' | 'changes_requested' | 'comment') {
+  async function handleSubmit(status: 'approved' | 'comment') {
     if (!authorName.trim()) {
       toast.error('Please enter your name');
       return;
@@ -83,7 +83,7 @@ export default function SharedPostReviewPage({
         body: JSON.stringify({
           review_link_id: reviewLinkId,
           author_name: authorName.trim(),
-          content: commentText.trim() || (status === 'approved' ? 'Approved' : 'Changes requested'),
+          content: commentText.trim() || (status === 'approved' ? 'Approved' : ''),
           status,
         }),
       });
@@ -92,11 +92,7 @@ export default function SharedPostReviewPage({
       const data = await res.json();
       setComments(prev => [...prev, data.comment]);
       setCommentText('');
-      toast.success(
-        status === 'approved' ? 'Post approved!' :
-        status === 'changes_requested' ? 'Changes requested' :
-        'Comment added'
-      );
+      toast.success(status === 'approved' ? 'Post approved!' : 'Comment added');
     } catch {
       toast.error('Failed to submit feedback');
     } finally {
@@ -194,10 +190,8 @@ export default function SharedPostReviewPage({
                 <div key={c.id} className="rounded-lg border border-nativz-border bg-surface p-3">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-xs font-medium text-text-primary">{c.author_name}</span>
-                    <Badge
-                      variant={c.status === 'approved' ? 'success' : c.status === 'changes_requested' ? 'warning' : 'default'}
-                    >
-                      {c.status === 'approved' ? 'Approved' : c.status === 'changes_requested' ? 'Changes requested' : 'Comment'}
+                    <Badge variant={c.status === 'approved' ? 'success' : 'default'}>
+                      {c.status === 'approved' ? 'Approved' : 'Comment'}
                     </Badge>
                     <span className="text-[10px] text-text-muted ml-auto">
                       {new Date(c.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
@@ -237,15 +231,6 @@ export default function SharedPostReviewPage({
             >
               <CheckCircle size={14} />
               Approve
-            </Button>
-            <Button
-              onClick={() => handleSubmit('changes_requested')}
-              disabled={submitting}
-              variant="ghost"
-              className="text-amber-400 hover:text-amber-300"
-            >
-              <AlertCircle size={14} />
-              Request changes
             </Button>
             <Button
               onClick={() => handleSubmit('comment')}

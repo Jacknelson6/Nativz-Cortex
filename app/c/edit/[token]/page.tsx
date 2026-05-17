@@ -82,7 +82,6 @@ interface CommentAttachment {
 
 type SharedCommentStatus =
   | 'approved'
-  | 'changes_requested'
   | 'comment'
   | 'video_revised';
 
@@ -171,7 +170,7 @@ interface SharedPayload {
   expires_at: string;
 }
 
-type ReviewStatus = 'approved' | 'changes_requested' | 'comment';
+type ReviewStatus = 'approved' | 'revising' | null;
 
 export default function EditingProjectSharePage({
   params,
@@ -666,7 +665,7 @@ function SharedReviewView({
     (v) => latestReview(v.comments) === 'approved',
   ).length;
   const changesCount = data.videos.filter(
-    (v) => latestReview(v.comments) === 'changes_requested',
+    (v) => latestReview(v.comments) === 'revising',
   ).length;
   const unapprovedVideos = useMemo(
     () => data.videos.filter((v) => latestReview(v.comments) !== 'approved'),
@@ -984,20 +983,18 @@ function ShareHeaderLogo() {
   );
 }
 
-function latestReview(comments: SharedComment[]): ReviewStatus | null {
-  // Walk newest → oldest and return the first "live" review signal. A
-  // changes_requested row that's been marked Revised (metadata.resolved)
-  // is no longer live, we skip past it so the pill can fall through to
-  // an earlier approval.
+function latestReview(comments: SharedComment[]): ReviewStatus {
+  // Walk newest to oldest. 'approved' wins; any 'comment' after the most
+  // recent approval (or when no approval exists) means revising.
+  let lastApprovalIdx = -1;
+  for (let i = comments.length - 1; i >= 0; i--) {
+    if (comments[i].status === 'approved') { lastApprovalIdx = i; break; }
+  }
   for (let i = comments.length - 1; i >= 0; i--) {
     const c = comments[i];
+    if (c.status === 'video_revised') continue;
     if (c.status === 'approved') return 'approved';
-    if (c.status === 'changes_requested') {
-      const resolved = !!(
-        c.metadata && (c.metadata as Record<string, unknown>).resolved
-      );
-      if (!resolved) return 'changes_requested';
-    }
+    if (c.status === 'comment' && i > lastApprovalIdx) return 'revising';
   }
   return null;
 }
@@ -1153,17 +1150,9 @@ function VideoCard({
     setPendingAttachments((prev) => prev.filter((a) => a.url !== url));
   }
 
-  async function submit(status: ReviewStatus) {
+  async function submit(status: SharedCommentStatus) {
     if (!authorName.trim()) {
       requireName();
-      return;
-    }
-    if (
-      status === 'changes_requested' &&
-      !commentText.trim() &&
-      pendingAttachments.length === 0
-    ) {
-      toast.error('Please enter revision notes or attach a file');
       return;
     }
     if (
@@ -1175,10 +1164,8 @@ function VideoCard({
       return;
     }
 
-    // Optimistic flow mirrors the calendar share page: paint a temp
-    // comment so the approve / changes_requested chip flips state without
-    // waiting on the round trip. Swap for the real row on success; yank
-    // it on failure and surface the error so the user can retry.
+    // Optimistic flow: paint a temp comment so the approval chip flips
+    // immediately. Swap for the real row on success; yank on failure.
     const tempId = `temp-${
       typeof crypto !== 'undefined' && 'randomUUID' in crypto
         ? crypto.randomUUID()
@@ -1199,8 +1186,6 @@ function VideoCard({
       // stays 'guest' so RoleChip renders nothing until the real row lands.
       author_role: 'guest',
       content: resolvedContent,
-      // Local intent; server may auto-upgrade changes_requested → approved
-      // and we reconcile when the real row lands.
       status,
       attachments: snapshotAttachments,
       metadata: {},
@@ -1214,11 +1199,7 @@ function VideoCard({
     setPinEnabled(true);
     setMarkAsRevision(false);
     const optimisticToastId = toast.success(
-      status === 'approved'
-        ? 'Video approved'
-        : status === 'changes_requested'
-          ? 'Revision added'
-          : 'Comment added',
+      status === 'approved' ? 'Video approved' : 'Comment added',
     );
 
     setSubmitting(true);
@@ -1232,8 +1213,6 @@ function VideoCard({
           content: resolvedContent,
           status,
           attachments: snapshotAttachments,
-          // Server only honors this for `comment` / `changes_requested`;
-          // approval rows strip it.
           timestampSeconds: anchorSeconds,
         }),
       });
@@ -1429,7 +1408,7 @@ function VideoCard({
             <CheckCircle size={13} /> Approved
           </span>
         )}
-        {review === 'changes_requested' && (
+        {review === 'revising' && (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-status-warning/12 px-3 py-1.5 text-sm font-medium text-status-warning ring-1 ring-status-warning/30">
             <AlertTriangle size={13} /> Revision requested
           </span>
@@ -1752,7 +1731,7 @@ function VideoCard({
           </button>
           <button
             type="button"
-            onClick={() => submit(markAsRevision ? 'changes_requested' : 'comment')}
+            onClick={() => submit('comment')}
             disabled={
               submitting ||
               uploading ||
@@ -1887,39 +1866,10 @@ function CommentRow({
   onSeek?: (seconds: number) => void;
 }) {
   const [deleting, setDeleting] = useState(false);
-  const [resolving, setResolving] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [dontAsk, setDontAsk] = useState(false);
-
-  const isResolved =
-    comment.status === 'changes_requested' &&
-    !!(comment.metadata && (comment.metadata as Record<string, unknown>).resolved);
   // Auto-approval inference was removed 2026-05-14. Old rows with
   // `metadata.auto_approved` render as plain approvals.
-
-  async function toggleResolved() {
-    if (resolving) return;
-    setResolving(true);
-    try {
-      const res = await fetch(`/api/editing/share/${token}/comment`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ commentId: comment.id, resolved: !isResolved }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(
-          typeof json.error === 'string' ? json.error : 'Failed to update',
-        );
-      }
-      onUpdated(json.comment as SharedComment);
-      toast.success(!isResolved ? 'Marked as revised' : 'Reopened revision');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update');
-    } finally {
-      setResolving(false);
-    }
-  }
 
   function requestDelete() {
     if (deleting) return;
@@ -2014,33 +1964,7 @@ function CommentRow({
     );
   }
 
-  const resolveButton =
-    comment.status === 'changes_requested' && isEditor ? (
-      <button
-        type="button"
-        onClick={toggleResolved}
-        disabled={resolving}
-        aria-label={isResolved ? 'Reopen revision' : 'Mark as revised'}
-        aria-pressed={isResolved}
-        className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
-          isResolved
-            ? 'bg-status-success/12 text-status-success ring-1 ring-status-success/30 hover:bg-status-success/20'
-            : 'bg-surface text-text-secondary ring-1 ring-nativz-border hover:bg-status-success/10 hover:text-status-success hover:ring-status-success/40'
-        }`}
-        title={
-          isResolved
-            ? 'Click to reopen this revision'
-            : 'Click when this revision is done'
-        }
-      >
-        {resolving ? (
-          <Loader2 size={11} className="animate-spin" />
-        ) : (
-          <CheckCircle size={11} />
-        )}
-        Revised
-      </button>
-    ) : null;
+  const resolveButton = null;
 
   const headerDeleteButton = (
     <button
@@ -2054,7 +1978,7 @@ function CommentRow({
     </button>
   );
 
-  const { tone, Icon } = resolveCommentStyle(comment.status, { resolved: isResolved });
+  const { tone, Icon } = resolveCommentStyle(comment.status);
   const time = new Date(comment.created_at).toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',
@@ -2078,16 +2002,10 @@ function CommentRow({
     );
   }
 
-  const containerClass = isResolved
-    ? 'group rounded-lg border border-status-success/30 bg-status-success/5 px-3 py-2'
-    : comment.status === 'changes_requested'
-      ? 'group rounded-lg border border-status-warning/30 bg-status-warning/5 px-3 py-2'
-      : 'group rounded-lg border border-nativz-border bg-surface px-3 py-2';
-  const trailingMeta = isResolved ? 'marked revised · ' : '';
-  const isChangesRequestedRow = comment.status === 'changes_requested';
+  const containerClass = 'group rounded-lg border border-nativz-border bg-surface px-3 py-2';
   const timestampPill =
     comment.timestamp_seconds !== null &&
-    (comment.status === 'comment' || comment.status === 'changes_requested') ? (
+    comment.status === 'comment' ? (
       <button
         type="button"
         onClick={onSeek ? () => onSeek(comment.timestamp_seconds as number) : undefined}
@@ -2120,8 +2038,7 @@ function CommentRow({
         <span className="font-medium text-text-primary">{comment.author_name}</span>
         <RoleChip role={comment.author_role} />
         <span className="text-text-muted">
-          · {trailingMeta}
-          {time}
+          · {time}
         </span>
         {timestampPill}
         {headerDeleteButton}
@@ -2136,11 +2053,6 @@ function CommentRow({
           {comment.attachments.map((a) => (
             <CommentAttachmentTile key={a.url} attachment={a} />
           ))}
-        </div>
-      )}
-      {isChangesRequestedRow && (
-        <div className="mt-2 flex items-center justify-end border-t border-nativz-border/60 pt-2">
-          {resolveButton}
         </div>
       )}
     </div>

@@ -3,7 +3,7 @@
  *
  * Three trigger sites:
  *   1. Approval-comment delete on the share-link review surface
- *   2. changes_requested on a charge unit that already has an unrefunded consume
+ *   2. comment on a charge unit that already has an unrefunded consume
  *   3. BEFORE DELETE trigger on scheduled_posts (cascade refund)
  *
  * State-based dedup: if the latest consume on this charge unit is already

@@ -20,13 +20,13 @@ describe('refundCredit', () => {
     await refundCredit(supabase, {
       chargeUnitKind: 'drop_video',
       chargeUnitId: 'dv-1',
-      note: 'changes_requested',
+      note: 'comment',
     });
 
     expect(rpc).toHaveBeenCalledWith('refund_credit', {
       p_charge_unit_kind: 'drop_video',
       p_charge_unit_id: 'dv-1',
-      p_note: 'changes_requested',
+      p_note: 'comment',
     });
   });
 

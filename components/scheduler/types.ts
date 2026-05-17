@@ -20,7 +20,7 @@ export interface CalendarPost {
     external_post_url?: string | null;
     failure_reason?: string | null;
   }[];
-  review_status: 'none' | 'pending' | 'approved' | 'changes_requested';
+  review_status: 'none' | 'pending' | 'approved' | 'revising';
   media: { id: string; filename: string; storage_path: string; thumbnail_url: string | null; late_media_url: string | null; mime_type: string | null }[];
   // Per-platform overrides (migrations 218 + 258). Hydrated from
   // /api/scheduler/posts so the post editor's Platform settings panel can

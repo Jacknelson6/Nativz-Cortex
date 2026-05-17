@@ -52,8 +52,8 @@ const POLL_MS = 3000;
 const IN_FLIGHT_DROP: DropStatus[] = ['ingesting', 'analyzing', 'generating'];
 const IN_FLIGHT_VIDEO: DropVideoStatus[] = ['pending', 'downloading', 'analyzing', 'caption_pending'];
 
-type ReviewStatus = 'approved' | 'changes_requested' | 'comment';
-type CommentStatus = ReviewStatus | 'caption_edit';
+type ReviewStatus = 'approved' | 'revising' | null;
+type CommentStatus = 'approved' | 'comment' | 'caption_edit' | 'tag_edit' | 'cover_edit' | 'schedule_change' | 'video_revised';
 
 interface DropComment {
   id: string;
@@ -113,31 +113,36 @@ interface ShareLinkRow {
   views: ShareLinkView[];
 }
 
-function latestReview(comments: DropComment[]): 'approved' | 'changes_requested' | null {
+function latestReview(comments: DropComment[]): ReviewStatus {
+  const ACTIVITY = new Set<CommentStatus>(['caption_edit', 'tag_edit', 'cover_edit', 'schedule_change', 'video_revised']);
+  let lastApprovalIdx = -1;
+  for (let i = comments.length - 1; i >= 0; i--) {
+    if (comments[i].status === 'approved') { lastApprovalIdx = i; break; }
+  }
   for (let i = comments.length - 1; i >= 0; i--) {
     const c = comments[i];
-    if (c.status === 'approved' || c.status === 'changes_requested') return c.status;
+    if (ACTIVITY.has(c.status)) continue;
+    if (c.status === 'approved') return 'approved';
+    if (c.status === 'comment' && i > lastApprovalIdx) return 'revising';
   }
   return null;
-}
-
-function newestChangesRequestedAt(comments: DropComment[]): string | null {
-  let newest: string | null = null;
-  for (const c of comments) {
-    if (c.status !== 'changes_requested') continue;
-    if (!newest || c.created_at > newest) newest = c.created_at;
-  }
-  return newest;
 }
 
 function hasOutstandingRevision(
   comments: DropComment[],
   revisionsCompletedAt: string | null,
 ): boolean {
-  const newest = newestChangesRequestedAt(comments);
-  if (!newest) return false;
+  const ACTIVITY = new Set<CommentStatus>(['caption_edit', 'tag_edit', 'cover_edit', 'schedule_change', 'video_revised']);
+  let newestCommentAt: string | null = null;
+  for (const c of comments) {
+    if (ACTIVITY.has(c.status)) continue;
+    if (c.status === 'comment' && (!newestCommentAt || c.created_at > newestCommentAt)) {
+      newestCommentAt = c.created_at;
+    }
+  }
+  if (!newestCommentAt) return false;
   if (!revisionsCompletedAt) return true;
-  return new Date(newest) > new Date(revisionsCompletedAt);
+  return new Date(newestCommentAt) > new Date(revisionsCompletedAt);
 }
 
 export default function DropDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -689,7 +694,7 @@ function VideoCard({
   const review = latestReview(comments);
   const outstandingRevision = hasOutstandingRevision(comments, revisionsCompletedAt);
   const hasRevisedCut = !!video.revised_video_url;
-  const showRevisionTools = scheduled && (review === 'changes_requested' || hasRevisedCut);
+  const showRevisionTools = scheduled && (review === 'revising' || hasRevisedCut);
 
   const isImagePost = video.media_type === 'image';
   const carouselCount = assetSummary?.count ?? 0;
@@ -742,12 +747,12 @@ function VideoCard({
               <CheckCircle size={10} /> Approved
             </span>
           )}
-          {review === 'changes_requested' && outstandingRevision && (
+          {review === 'revising' && outstandingRevision && (
             <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/90 px-2 py-0.5 text-[11px] font-medium text-amber-950">
               <AlertTriangle size={10} /> Changes
             </span>
           )}
-          {review === 'changes_requested' && !outstandingRevision && (
+          {review === 'revising' && !outstandingRevision && (
             <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/90 px-2 py-0.5 text-[11px] font-medium text-blue-50">
               <CheckCircle size={10} /> Revised
             </span>
@@ -1128,19 +1133,15 @@ function CommentRow({ comment }: { comment: DropComment }) {
   const tone =
     comment.status === 'approved'
       ? 'text-emerald-300'
-      : comment.status === 'changes_requested'
-        ? 'text-amber-300'
-        : comment.status === 'caption_edit'
-          ? 'text-accent-text'
-          : 'text-text-secondary';
+      : comment.status === 'caption_edit'
+        ? 'text-accent-text'
+        : 'text-text-secondary';
   const Icon =
     comment.status === 'approved'
       ? CheckCircle
-      : comment.status === 'changes_requested'
-        ? AlertTriangle
-        : comment.status === 'caption_edit'
-          ? Type
-          : MessageSquare;
+      : comment.status === 'caption_edit'
+        ? Type
+        : MessageSquare;
   const time = new Date(comment.created_at).toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',
@@ -1469,27 +1470,21 @@ function RevisionRow({ entry }: { entry: RevisionEntry }) {
   const tone =
     c.status === 'approved'
       ? 'text-emerald-300'
-      : c.status === 'changes_requested'
-        ? 'text-amber-300'
-        : c.status === 'caption_edit'
-          ? 'text-accent-text'
-          : 'text-text-secondary';
+      : c.status === 'caption_edit'
+        ? 'text-accent-text'
+        : 'text-text-secondary';
   const Icon =
     c.status === 'approved'
       ? CheckCircle
-      : c.status === 'changes_requested'
-        ? AlertTriangle
-        : c.status === 'caption_edit'
-          ? Type
-          : MessageSquare;
+      : c.status === 'caption_edit'
+        ? Type
+        : MessageSquare;
   const label =
     c.status === 'approved'
       ? 'Approved'
-      : c.status === 'changes_requested'
-        ? 'Revision'
-        : c.status === 'caption_edit'
-          ? 'Edited caption'
-          : 'Comment';
+      : c.status === 'caption_edit'
+        ? 'Edited caption'
+        : 'Comment';
   const time = new Date(c.created_at).toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',

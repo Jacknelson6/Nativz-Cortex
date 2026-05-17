@@ -14,7 +14,7 @@ import type { ShareLinkKind } from '@/lib/share/identity';
  *  - post.delete
  *  - video.delete
  *  - revision.mark_revised
- *  - comment.admin_response.create
+ *  - comment.admin.create
  *  - auth.login
  *  - auth.login.failed
  */
@@ -26,7 +26,7 @@ export type ShareAdminAction =
   | 'post.delete'
   | 'video.delete'
   | 'revision.mark_revised'
-  | 'comment.admin_response.create'
+  | 'comment.admin.create'
   | 'auth.login'
   | 'auth.login.failed';
 

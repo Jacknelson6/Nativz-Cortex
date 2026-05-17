@@ -400,7 +400,7 @@ export async function GET(request: NextRequest) {
         });
 
       const reviewLinks = post.post_review_links ?? [];
-      let review_status: 'none' | 'pending' | 'approved' | 'changes_requested' = 'none';
+      let review_status: 'none' | 'pending' | 'approved' = 'none';
       if (reviewLinks.length > 0) review_status = 'pending';
 
       return {

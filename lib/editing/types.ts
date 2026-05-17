@@ -52,11 +52,10 @@ export interface EditingProjectVideo {
   mux_status?: 'pending' | 'uploading' | 'processing' | 'ready' | 'errored' | null;
   /**
    * Latest reviewer verdict for this cut, derived from
-   * `editing_project_review_comments` (newest non-resolved row that
-   * isn't a plain comment / video_revised event). Server-computed;
-   * not stored on the row itself.
+   * `editing_project_review_comments` (newest-first walk, skipping
+   * video_revised events). Server-computed; not stored on the row itself.
    */
-  review_status?: 'approved' | 'changes_requested' | null;
+  review_status?: 'approved' | 'revising' | null;
 }
 
 /**
@@ -155,9 +154,8 @@ export interface EditingProject {
   /**
    * Per-video review-state rollup. Walks `editing_project_review_comments`
    * newest-to-oldest per video (mirrors calendar's `latestReview()`):
-   * - `approved_count`: latest non-comment status is `approved`
-   * - `changes_count`: latest non-comment status is `changes_requested`
-   *   AND `metadata.resolved` is not truthy
+   * - `approved_count`: latest status (skipping video_revised) is `approved`
+   * - `changes_count`: latest status (skipping video_revised) is `comment`
    * - `pending_count`: video has no terminal review row
    *
    * Source of truth for "are the creatives approved?" — the project's

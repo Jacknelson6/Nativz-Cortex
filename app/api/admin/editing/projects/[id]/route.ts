@@ -122,10 +122,7 @@ export async function GET(
       .select('*')
       .eq('project_id', id)
       .order('created_at', { ascending: false }),
-    // Walk newest-first so the first row we see for a given video_id
-    // wins. We strip 'comment'/'video_revised' since those don't
-    // change a cut's review state, and we treat resolved
-    // changes_requested rows as no-ops.
+    // Walk newest-first so the first row we see for a given video_id wins.
     admin
       .from('editing_project_review_comments')
       .select('video_id, status, metadata, created_at')
@@ -138,25 +135,35 @@ export async function GET(
       .order('scheduled_at', { ascending: true }),
   ]);
 
-  // Derive a per-video review status: 'approved' | 'changes_requested' | null.
-  // Walk newest -> oldest, keep the first non-resolved review row per
-  // video. The dialog uses this to render a status pill on each cut card.
+  // Derive a per-video review status: 'approved' | 'revising' | null.
+  // Walk newest -> oldest per video; the first non-activity row determines state.
   type ReviewRow = {
     video_id: string | null;
-    status: 'approved' | 'changes_requested' | 'comment' | 'video_revised';
-    metadata: Record<string, unknown> | null;
+    status: 'approved' | 'comment' | 'video_revised';
   };
-  const reviewByVideo = new Map<string, 'approved' | 'changes_requested'>();
+  const reviewByVideo = new Map<string, 'approved' | 'revising'>();
+  // Build per-video lists so we can apply latestReview logic.
+  const commentsByVideo = new Map<string, ReviewRow[]>();
   for (const c of (reviewComments ?? []) as ReviewRow[]) {
     if (!c.video_id) continue;
-    if (reviewByVideo.has(c.video_id)) continue;
-    if (c.status === 'comment' || c.status === 'video_revised') continue;
-    if (
-      c.status === 'changes_requested' &&
-      (c.metadata as { resolved?: boolean } | null)?.resolved
-    )
-      continue;
-    reviewByVideo.set(c.video_id, c.status);
+    const list = commentsByVideo.get(c.video_id) ?? [];
+    list.push(c);
+    commentsByVideo.set(c.video_id, list);
+  }
+  for (const [videoId, rows] of commentsByVideo) {
+    // rows are already newest-first from the query ORDER
+    let lastApprovalIdx = -1;
+    for (let i = rows.length - 1; i >= 0; i--) {
+      if (rows[i].status === 'approved') { lastApprovalIdx = i; break; }
+    }
+    let resolved: 'approved' | 'revising' | null = null;
+    for (let i = rows.length - 1; i >= 0; i--) {
+      const s = rows[i].status;
+      if (s === 'video_revised') continue;
+      if (s === 'approved') { resolved = 'approved'; break; }
+      if (s === 'comment' && i > lastApprovalIdx) { resolved = 'revising'; break; }
+    }
+    if (resolved) reviewByVideo.set(videoId, resolved);
   }
 
   // Dedup by `position` slot, keeping only the latest revision (the

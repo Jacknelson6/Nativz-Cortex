@@ -2,7 +2,6 @@ import { NextResponse, after } from 'next/server';
 import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getShareContextOrNull, resolveBoundIdentity } from '@/lib/share/identity';
-import { createNotification } from '@/lib/notifications/create';
 import { notifyViewersOfShareEvent } from '@/lib/share/notify-viewers';
 import { publishScheduledPost } from '@/lib/calendar/schedule-drop';
 import { reschedulePastDueDrafts } from '@/lib/calendar/reschedule-past-due';
@@ -18,15 +17,9 @@ import { isMondayConfigured } from '@/lib/monday/client';
 import {
   findContentCalendarItem,
   groupTitleForCalendarStart,
-  syncMondayApprovalForDrop,
 } from '@/lib/monday/calendar-approval';
 import { resolvePaidMediaWebhook } from '@/lib/chat/resolve-paid-media-webhook';
 import { getClientNotificationSetting } from '@/lib/notifications/get-client-setting';
-import {
-  consumeForApproval,
-  hasPriorApproval,
-  refundForUnapproval,
-} from '@/lib/credits/comment-hooks';
 
 const AttachmentSchema = z.object({
   url: z.string().url(),
@@ -39,19 +32,20 @@ const BodySchema = z
   .object({
     postId: z.string().uuid(),
     authorName: z.string().min(1).max(80),
-    // Content can be empty when the user is submitting attachment-only
-    // feedback ("here's a reference image, no notes needed"). The refine
-    // below enforces that *something* is present, either text or files.
+    // Empty content is fine when the user is submitting attachment-only
+    // feedback. The refine below enforces that *something* is present.
     content: z.string().max(2000).default(''),
-    status: z.enum(['approved', 'changes_requested', 'comment']),
+    // Migration 322 collapsed `changes_requested` into `comment`. A comment
+    // without `Approve` IS the revision request. `approved` still arrives
+    // here as its own status row stamped by the Approve button.
+    status: z.enum(['approved', 'comment']),
     attachments: z.array(AttachmentSchema).max(10).optional(),
     // Optional anchor, when present, the player will seek here on click.
-    // Capped at 24h to keep the column NUMERIC(10,3) safe and stay within
-    // sane short-form video bounds. Negative values rejected.
+    // Approvals ignore the field (the timestamp has no meaning on a state
+    // flip), comments and replies honor it.
     timestampSeconds: z.number().min(0).max(86400).nullable().optional(),
-    // NAT-73: replies hang off a prior comment in the same review thread.
-    // Only top-level "comment" status rows can be replied to; the handler
-    // also rejects replies-to-replies to keep threads one level deep.
+    // Replies hang off any prior comment in the same review thread. Nesting
+    // is unlimited at the data layer; the UI caps visual indent at depth 4.
     parentCommentId: z.string().uuid().nullable().optional(),
   })
   .refine(
@@ -62,27 +56,6 @@ const BodySchema = z
 const DeleteSchema = z.object({
   commentId: z.string().uuid(),
 });
-
-const PatchSchema = z.object({
-  commentId: z.string().uuid(),
-  resolved: z.boolean(),
-});
-
-// Natural-language approval inference was removed 2026-05-14. Even a
-// conservative heuristic ("lgtm", "looks great") was silently locking posts
-// the client didn't intend to approve, and "approved" semantics had to mean
-// the button was actually pressed. Status now reflects exactly what the
-// client submitted; the explicit Approve action is the only path to
-// `status='approved'`.
-
-const TITLE_BY_STATUS: Record<'approved' | 'changes_requested' | 'comment', (a: string, c: string) => string> = {
-  approved: (a, c) => `${a} approved a post in ${c}`,
-  changes_requested: (a, c) => `${a} requested changes in ${c}`,
-  comment: (a, c) => `${a} left a comment on ${c}`,
-};
-
-const REPLY_TITLE = (author: string, client: string) =>
-  `${author} replied to a comment in ${client}`;
 
 export async function POST(
   req: Request,
@@ -112,84 +85,40 @@ export async function POST(
     return NextResponse.json({ error: 'post is not part of this share link' }, { status: 400 });
   }
 
-  // Status reflects exactly what the client submitted. Approvals only happen
-  // via the explicit Approve button (which posts status='approved'); plain
-  // comments and change requests never auto-upgrade based on phrasing.
-  const submittedStatus = parsed.data.status;
   const trimmedContent = parsed.data.content.trim();
-  const finalStatus: 'approved' | 'changes_requested' | 'comment' = submittedStatus;
-  const insertMetadata: Record<string, unknown> = {};
+  const submittedStatus = parsed.data.status;
 
-  // Only honor a timestamp on plain comments and change requests, anchoring
-  // an "approved" stamp to a specific moment doesn't carry meaning.
+  // Approvals never carry a timestamp anchor (a state flip has no moment).
   const timestampSeconds =
-    finalStatus === 'comment' || finalStatus === 'changes_requested'
-      ? parsed.data.timestampSeconds ?? null
-      : null;
+    submittedStatus === 'comment' ? parsed.data.timestampSeconds ?? null : null;
 
-  // NAT-73: validate the parent reference if present. Reply rows must
-  //   1. Live under the same review_link_id as this share-link post
-  //      (prevents threading a reply onto a different client's calendar
-  //      via a leaked id).
-  //   2. Be top-level themselves (no replies-to-replies, one level deep
-  //      keeps the UI tractable and dodges runaway nesting).
-  //   3. Carry "comment" status. Approvals / change-requests / caption
-  //      edits etc. are audit-trail rows, not conversation roots.
-  //   4. Themselves carry status "comment", replies are conversation,
-  //      not approvals, so we always store them as plain comments
-  //      regardless of what the client submitted.
+  // Parent validation: must be in the same review thread. Depth is otherwise
+  // unrestricted; the UI flattens past visual depth 4.
   let parentCommentId: string | null = null;
   if (parsed.data.parentCommentId) {
     const { data: parent } = await admin
       .from('post_review_comments')
-      .select('id, review_link_id, status, parent_comment_id')
+      .select('id, review_link_id')
       .eq('id', parsed.data.parentCommentId)
-      .single<{
-        id: string;
-        review_link_id: string;
-        status: string;
-        parent_comment_id: string | null;
-      }>();
+      .single<{ id: string; review_link_id: string }>();
     if (!parent || parent.review_link_id !== reviewLinkId) {
       return NextResponse.json(
         { error: 'parent comment not found on this post' },
         { status: 400 },
       );
     }
-    if (parent.parent_comment_id) {
-      return NextResponse.json(
-        { error: 'replies cannot be nested further' },
-        { status: 400 },
-      );
-    }
-    if (parent.status !== 'comment') {
-      return NextResponse.json(
-        { error: 'only conversation comments accept replies' },
-        { status: 400 },
-      );
-    }
     parentCommentId = parent.id;
   }
 
-  // Force replies to "comment" status regardless of what the client sent.
-  // Threading an approval onto another comment doesn't carry meaning, and
-  // the auto-approval heuristic upstream would otherwise let "looks good"
-  // replies silently lock a post.
-  const persistedStatus: 'approved' | 'changes_requested' | 'comment' =
-    parentCommentId ? 'comment' : finalStatus;
-
-  // Phase D soft-block (scope_exhausted 402 + PreApprovalModal) was removed.
-  // Clients should never see a "you're out of edited videos" pop-up. Approvals
-  // always write through; over-scope accounting stays an internal concern.
+  // Replies are always conversation. Approval pressed while replying still
+  // posts the reply as a comment; the approval is a separate top-level row
+  // stamped by the dedicated button.
+  const persistedStatus: 'approved' | 'comment' =
+    parentCommentId ? 'comment' : submittedStatus;
 
   // PRD 05: derive `author_role` + `author_user_id` from the bound session
-  // (not from the client). The client cannot influence its own role tag.
-  //  - admin / super_admin → 'admin'
-  //  - viewer with matching org → 'viewer'
-  //  - everyone else (no session, wrong agency, anonymous) → 'guest'
-  //
-  // Wrong-agency sessions silently fall through to 'guest' on the comment
-  // surface; the gateway is where mismatches surface to the user. PRD 02.
+  // (not from the client). Wrong-agency or anonymous sessions fall through
+  // to 'guest' here; the gateway surfaces mismatches to the user.
   const shareContext = await getShareContextOrNull(token);
   let authorRole: 'admin' | 'viewer' | 'guest' = 'guest';
   let authorUserId: string | null = null;
@@ -206,23 +135,11 @@ export async function POST(
     }
   }
 
-  // PRD 01 + 05: top-level rows map status → kind one-to-one *unless* the
-  // author is an authenticated admin posting a plain comment, in which case
-  // kind flips to `admin_response` so the thread renders it as a team reply
-  // (and downstream consumers can split admin vs client traffic cheaply).
-  // Replies are always feedback / admin_response depending on author.
-  // Approval / revision rows keep their status-derived kind regardless of
-  // author, those are state transitions, not free-form messages.
-  const baseKind: 'revision' | 'feedback' | 'approval' =
-    parentCommentId !== null
-      ? 'feedback'
-      : persistedStatus === 'changes_requested'
-        ? 'revision'
-        : persistedStatus === 'approved'
-          ? 'approval'
-          : 'feedback';
-  const insertKind: 'revision' | 'feedback' | 'approval' | 'admin_response' =
-    authorRole === 'admin' && baseKind === 'feedback' ? 'admin_response' : baseKind;
+  // Migration 322 collapsed `kind` to feedback | approval | video_revised.
+  // Admin-vs-viewer distinction is derived from `author_role` at render time,
+  // so there's no separate admin_response kind.
+  const insertKind: 'feedback' | 'approval' =
+    persistedStatus === 'approved' ? 'approval' : 'feedback';
 
   const { data, error } = await admin
     .from('post_review_comments')
@@ -235,7 +152,7 @@ export async function POST(
       status: persistedStatus,
       kind: insertKind,
       attachments: parsed.data.attachments ?? [],
-      metadata: insertMetadata,
+      metadata: {},
       timestamp_seconds: timestampSeconds,
       parent_comment_id: parentCommentId,
     })
@@ -245,29 +162,13 @@ export async function POST(
     return NextResponse.json({ error: error?.message ?? 'failed' }, { status: 500 });
   }
 
-  // Run notifications + Monday sync + Zernio publish AFTER the response.
-  // `after()` keeps the function alive past the response on Vercel, so
-  // multi-step work (Monday writeback, Zernio publish) doesn't get cut off
-  // mid-flight. Bare fire-and-forget would race against serverless shutdown , 
-  // that's how the Monday sync was silently dropping while chat 🎉 messages
-  // still landed.
+  // After the response: viewer ping + approve-driven side effects only.
+  // - Admin bell + Google Chat pings are DEFERRED to coalesce-review-pings.
+  // - Monday writeback is gone (state doesn't roundtrip there anymore).
+  // - Credit consume/refund is gone (the credit program is being replaced).
   after(async () => {
-    try {
-      await notifyAdminsOfComment(admin, link.id, link.drop_id, token, reviewLinkMap, {
-        postId: parsed.data.postId,
-        authorName: parsed.data.authorName.trim(),
-        content: trimmedContent,
-        status: persistedStatus,
-        attachments: parsed.data.attachments ?? [],
-        isReply: parentCommentId !== null,
-      });
-    } catch (err) {
-      console.error('Comment notification failed:', err);
-    }
-
-    // PRD 08: admin-authored responses + state changes should also land in
-    // the viewer's portal bell. Skips when the comment is viewer/guest-
-    // authored (those flow admin-direction only).
+    // PRD 08: admin-authored events land in viewer portal bells. Viewer/
+    // guest authored comments flow admin-direction only.
     if (authorRole === 'admin') {
       try {
         const { data: dropRow } = await admin
@@ -276,17 +177,16 @@ export async function POST(
           .eq('id', link.drop_id)
           .maybeSingle<{ client_id: string | null; clients: { name: string | null } | null }>();
         const brandLabel = dropRow?.clients?.name ?? 'your calendar';
-        const titleByStatus: Record<typeof persistedStatus, string> = {
-          approved: `${parsed.data.authorName.trim()} approved a post on ${brandLabel}`,
-          changes_requested: `${parsed.data.authorName.trim()} flagged a revision on ${brandLabel}`,
-          comment: `${parsed.data.authorName.trim()} replied on ${brandLabel}`,
-        };
+        const title =
+          persistedStatus === 'approved'
+            ? `${parsed.data.authorName.trim()} approved a post on ${brandLabel}`
+            : `${parsed.data.authorName.trim()} replied on ${brandLabel}`;
         const preview = trimmedContent
           ? trimmedContent.slice(0, 140) + (trimmedContent.length > 140 ? '…' : '')
           : '';
         await notifyViewersOfShareEvent({
           clientId: dropRow?.client_id ?? null,
-          title: titleByStatus[persistedStatus],
+          title,
           body: preview,
           linkPath: `/s/${token}`,
           type: 'feedback_received',
@@ -296,20 +196,10 @@ export async function POST(
       }
     }
 
-    // Recompute drop-level approval state and push to Monday. State-derived
-    // (not event-driven), so a single approval that doesn't yet make
-    // everything approved still leaves Monday at "Waiting on approval", and
-    // the next event re-syncs.
-    try {
-      await syncMondayApprovalForDrop(admin, link.drop_id);
-    } catch (err) {
-      console.error('Monday calendar approval sync failed:', err);
-    }
-
     if (persistedStatus === 'approved') {
-      // Past-due fixup: shift this draft to a gap in the current month if its
-      // original scheduled_at has already passed. Mirrors the bulk-approve
-      // path so single-comment approvals get the same protection.
+      // Past-due fixup: shift this draft into a current-month gap if its
+      // original scheduled_at has already passed. Same protection the bulk
+      // approve path gets.
       let pastDueResult: Awaited<ReturnType<typeof reschedulePastDueDrafts>> | null = null;
       try {
         pastDueResult = await reschedulePastDueDrafts(admin, [parsed.data.postId]);
@@ -318,15 +208,13 @@ export async function POST(
       }
 
       // publishScheduledPost is idempotent (returns alreadyPublished=true if
-      // already scheduled), so re-approval / multiple approvers won't double-post.
+      // already scheduled), so re-approval won't double-post.
       try {
         await publishScheduledPost(admin, parsed.data.postId);
       } catch (err) {
         console.error(`Approval → Zernio publish failed for post ${parsed.data.postId}:`, err);
       }
 
-      // Jack-only ping if we shifted the post. Posted to the client's chat
-      // webhook (or agency catchall / OPS fallback). Never goes to the client.
       if (pastDueResult && (pastDueResult.moves.length > 0 || pastDueResult.overflow.length > 0)) {
         try {
           await notifyPastDueFixup(admin, link.drop_id, pastDueResult);
@@ -335,26 +223,18 @@ export async function POST(
         }
       }
 
-      // Approval-as-consumption: 1 credit per approved video. State-based
-      // dedup in consume_credit makes re-approval (delete+approve) safe.
-      await consumeForApproval(admin, {
-        scheduledPostId: parsed.data.postId,
-        shareLinkId: link.id,
-        reviewerName: parsed.data.authorName.trim(),
-        reviewLinkId,
-      });
-    } else if (persistedStatus === 'changes_requested') {
-      // Silent-overcharge fix: if this post was already approved earlier
-      // and the reviewer is now requesting changes, refund the prior
-      // consume. refund_credit is a no-op if there's nothing to refund,
-      // but we guard with hasPriorApproval to avoid an extra round-trip
-      // on the common (no-prior-approval) path.
-      const prior = await hasPriorApproval(admin, reviewLinkId);
-      if (prior) {
-        await refundForUnapproval(admin, {
-          scheduledPostId: parsed.data.postId,
-          reason: 'changes_requested after prior approval',
+      // All-approved 🎉 ping is still single-shot, so we run it inline here
+      // (atomic claim via all_approved_notified_at). Per-event admin bells
+      // for the approval itself flow through the coalesce cron.
+      try {
+        await maybeFireAllApprovedPing(admin, {
+          shareLinkId: link.id,
+          dropId: link.drop_id,
+          token,
+          reviewLinkMap,
         });
+      } catch (err) {
+        console.error('All-approved ping failed:', err);
       }
     }
   });
@@ -404,281 +284,47 @@ export async function DELETE(
     return NextResponse.json({ error: delErr.message }, { status: 500 });
   }
 
-  // Only approval deletions affect the Monday-side state ("Client approved" →
-  // "Waiting on approval"). Other history rows (caption_edit, tag_edit,
-  // schedule_change, video_revised, plain comments) are pure audit trail , 
-  // skip the sync to avoid a needless Monday round-trip.
+  // Clearing the all-approved dedup stamp lets a future re-approval fire the
+  // celebration again. Other status rows (caption_edit, tag_edit, etc.) are
+  // pure audit trail; nothing to undo.
   if (comment.status === 'approved') {
-    // Clear the all-approved dedup stamp so a future re-approval can fire the
-    // celebration ping again. Only clear when this calendar was previously
-    // fully approved (otherwise the stamp is already null).
     await admin
       .from('content_drop_share_links')
       .update({ all_approved_notified_at: null })
       .eq('id', link.id);
-
-    // Reverse the post_id → review_link_id map to find the post tied to
-    // this deleted approval. Needed for the credit refund (resolveChargeUnit
-    // takes a scheduled_post_id).
-    const reviewLinkMap = link.post_review_link_map ?? {};
-    const reversedPostId = Object.entries(reviewLinkMap).find(
-      ([, reviewId]) => reviewId === comment.review_link_id,
-    )?.[0];
-
-    after(async () => {
-      try {
-        await syncMondayApprovalForDrop(admin, link.drop_id);
-      } catch (err) {
-        console.error('Monday calendar approval sync failed (delete):', err);
-      }
-
-      // Approval revoked → refund the consume row. State-based dedup
-      // makes this a no-op if the consume was already refunded (e.g. by
-      // an earlier changes_requested-after-approval). Skips silently if
-      // we somehow can't reverse-map the post id.
-      if (reversedPostId) {
-        await refundForUnapproval(admin, {
-          scheduledPostId: reversedPostId,
-          reason: 'approval comment deleted',
-        });
-      }
-    });
   }
 
   return NextResponse.json({ ok: true, commentId: comment.id });
 }
 
-/**
- * Toggle the "resolved" flag on a `changes_requested` history row. Editors
- * use this to mark a revision request as handled, the icon flips from a
- * warning to a green check and the label changes to "Revised". Stored as a
- * metadata flag rather than a status change so the comment still threads
- * correctly with other change-request rows in the audit trail.
- */
-export async function PATCH(
-  req: Request,
-  ctx: { params: Promise<{ token: string }> },
-) {
-  const { token } = await ctx.params;
-  const body = await req.json().catch(() => null);
-  const parsed = PatchSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
-  }
-
-  const admin = createAdminClient();
-  const { data: link } = await admin
-    .from('content_drop_share_links')
-    .select('id, drop_id, post_review_link_map, expires_at, revisions_complete_notified_at')
-    .eq('token', token)
-    .single<{
-      id: string;
-      drop_id: string;
-      post_review_link_map: Record<string, string>;
-      expires_at: string;
-      revisions_complete_notified_at: string | null;
-    }>();
-  if (!link) return NextResponse.json({ error: 'not found' }, { status: 404 });
-  if (new Date(link.expires_at) < new Date()) {
-    return NextResponse.json({ error: 'link expired' }, { status: 410 });
-  }
-
-  const { data: comment } = await admin
-    .from('post_review_comments')
-    .select('id, review_link_id, status, metadata')
-    .eq('id', parsed.data.commentId)
-    .single<{ id: string; review_link_id: string; status: string; metadata: Record<string, unknown> | null }>();
-  if (!comment) return NextResponse.json({ error: 'not found' }, { status: 404 });
-
-  const allowedReviewIds = new Set(Object.values(link.post_review_link_map ?? {}));
-  if (!allowedReviewIds.has(comment.review_link_id)) {
-    return NextResponse.json({ error: 'comment is not part of this share link' }, { status: 400 });
-  }
-  if (comment.status !== 'changes_requested') {
-    return NextResponse.json(
-      { error: 'only revision requests can be marked resolved' },
-      { status: 400 },
-    );
-  }
-
-  const existing = comment.metadata ?? {};
-  const nextMetadata: Record<string, unknown> = parsed.data.resolved
-    ? { ...existing, resolved: true, resolved_at: new Date().toISOString() }
-    : { ...existing, resolved: false, resolved_at: null };
-
-  const { data: updated, error } = await admin
-    .from('post_review_comments')
-    .update({ metadata: nextMetadata })
-    .eq('id', comment.id)
-    .select('id, review_link_id, author_name, content, status, created_at, attachments, metadata, timestamp_seconds')
-    .single();
-  if (error || !updated) {
-    return NextResponse.json({ error: error?.message ?? 'failed' }, { status: 500 });
-  }
-
-  // After the toggle: figure out whether this transition completed the
-  // revision pass for the entire share link. We only fire the "all
-  // revisions ready, please re-review" notification when the unresolved
-  // count goes from N>0 to 0, and we dedup via
-  // `revisions_complete_notified_at` so toggling doesn't spam the client.
-  // If the editor un-marks one (unresolved goes from 0 → 1), we clear the
-  // dedup stamp so a future completion fires again.
-  after(async () => {
-    try {
-      await maybeFireRevisionsCompleteNotification(admin, {
-        linkId: link.id,
-        dropId: link.drop_id,
-        token,
-        reviewIds: Array.from(allowedReviewIds),
-        previouslyNotifiedAt: link.revisions_complete_notified_at,
-      });
-    } catch (err) {
-      console.error('revisions-complete notify check failed:', err);
-    }
-  });
-
-  return NextResponse.json({ comment: updated });
-}
-
-/**
- * Server-side detector + notifier for the "all revisions ready" event.
- *
- * Fires after the editor toggles a `changes_requested` comment's resolved
- * flag. Counts unresolved revision requests across every post in this share
- * link's `post_review_link_map` and:
- *
- *   - If unresolved === 0 and the link wasn't already notified, posts the
- *     wrap-up chat ping ("All revisions complete on <client>, please
- *     re-review") to the client's Google Chat webhook and stamps
- *     `revisions_complete_notified_at` so we don't double-fire.
- *   - If unresolved > 0 and the link WAS previously notified, clears the
- *     stamp so the next completion fires again.
- *
- * Total >= 1 guard prevents firing on a share link that never had any
- * revision requests in the first place, we only want this for actually-
- * worked-through revisions.
- */
-async function maybeFireRevisionsCompleteNotification(
+async function maybeFireAllApprovedPing(
   admin: ReturnType<typeof createAdminClient>,
   args: {
-    linkId: string;
+    shareLinkId: string;
     dropId: string;
     token: string;
-    reviewIds: string[];
-    previouslyNotifiedAt: string | null;
+    reviewLinkMap: Record<string, string>;
   },
-) {
-  if (args.reviewIds.length === 0) return;
+): Promise<void> {
+  const allApproved = await checkAllApproved(admin, args.reviewLinkMap);
+  if (!allApproved) return;
 
-  const { data: changeRows } = await admin
-    .from('post_review_comments')
-    .select('id, metadata')
-    .in('review_link_id', args.reviewIds)
-    .eq('status', 'changes_requested');
-
-  const total = changeRows?.length ?? 0;
-  if (total === 0) return; // Never had revisions, nothing to wrap up.
-
-  const unresolved = (changeRows ?? []).filter((c) => {
-    const m = (c.metadata ?? {}) as Record<string, unknown>;
-    return m.resolved !== true;
-  }).length;
-
-  if (unresolved > 0) {
-    // Editor un-marked something, reset dedup so a future completion fires.
-    if (args.previouslyNotifiedAt) {
-      await admin
-        .from('content_drop_share_links')
-        .update({ revisions_complete_notified_at: null })
-        .eq('id', args.linkId);
-    }
-    return;
-  }
-
-  // unresolved === 0, but skip if we've already pinged for this link.
-  if (args.previouslyNotifiedAt) return;
-
-  // Look up the client + chat webhook so we can route the ping.
-  const { data: drop } = await admin
-    .from('content_drops')
-    .select('id, clients(name, agency, chat_webhook_url)')
-    .eq('id', args.dropId)
-    .single<{
-      id: string;
-      clients: { name: string; agency: string | null; chat_webhook_url: string | null } | null;
-    }>();
-
-  const clientName = drop?.clients?.name ?? 'Client';
-  const chatWebhookUrl = await resolveTeamChatWebhook(admin, {
-    primaryUrl: drop?.clients?.chat_webhook_url ?? null,
-    agency: drop?.clients?.agency ?? null,
-  });
-  const shareUrl = `${getCortexAppUrl(getBrandFromAgency(drop?.clients?.agency ?? null))}/s/${args.token}`;
-
-  if (chatWebhookUrl) {
-    // Internal-only ping. The email to the client only goes out when an
-    // admin hits *Notify* in the share-history panel (calls /notify-
-    // revisions).
-    postToGoogleChatSafe(
-      chatWebhookUrl,
-      buildChatCard({
-        cardId: `revisions-complete-${args.linkId}`,
-        headerTitle: '✅ Revisions resolved (internal)',
-        headerSubtitle: clientName,
-        sections: [
-          {
-            widgets: [
-              {
-                type: 'text',
-                text: 'Editor marked every revision request as resolved. The client has <b>not</b> been emailed yet.',
-              },
-              {
-                type: 'text',
-                text: 'QA the new cuts, then hit <b>Notify</b> in the share history to email them.',
-              },
-              { type: 'button', text: 'Open share history', url: shareUrl, filled: true },
-            ],
-          },
-        ],
-        fallbackText: `✅ Editor resolved every revision on ${clientName}. QA then notify. ${shareUrl}`,
-      }),
-      `revisions-complete ${args.linkId}`,
-    );
-  }
-
-  await admin
+  // Atomic claim: only the request that flips NULL → timestamp wins. Two
+  // concurrent approvers can't both fire the celebration.
+  const { data: claimed } = await admin
     .from('content_drop_share_links')
-    .update({ revisions_complete_notified_at: new Date().toISOString() })
-    .eq('id', args.linkId);
-}
+    .update({ all_approved_notified_at: new Date().toISOString() })
+    .eq('id', args.shareLinkId)
+    .is('all_approved_notified_at', null)
+    .select('id')
+    .maybeSingle();
+  if (!claimed) return;
 
-async function notifyAdminsOfComment(
-  admin: ReturnType<typeof createAdminClient>,
-  shareLinkId: string,
-  dropId: string,
-  shareToken: string,
-  reviewLinkMap: Record<string, string>,
-  comment: {
-    postId: string;
-    authorName: string;
-    content: string;
-    status: 'approved' | 'changes_requested' | 'comment';
-    attachments: Array<{ url: string; filename: string; mime_type: string; size_bytes: number }>;
-    isReply?: boolean;
-  },
-) {
-  // Fetch drop + the specific post + share-link name in parallel. The post's
-  // `scheduled_at` is surfaced in the chat message body so reviewers can see
-  // *which* post the change request / comment / approval is about without
-  // opening the link. The share-link's `name` is the admin-facing project
-  // title surfaced on the celebration ping ("All N posts from Acme's
-  // April Refresh project are approved!").
-  const reviewLinkPostIds = Object.keys(reviewLinkMap);
-  const [dropRes, linkRes, allPostsRes] = await Promise.all([
+  const [dropRes, linkRes] = await Promise.all([
     admin
       .from('content_drops')
       .select('id, client_id, start_date, clients(name, agency, chat_webhook_url)')
-      .eq('id', dropId)
+      .eq('id', args.dropId)
       .single<{
         id: string;
         client_id: string | null;
@@ -688,178 +334,67 @@ async function notifyAdminsOfComment(
     admin
       .from('content_drop_share_links')
       .select('name')
-      .eq('id', shareLinkId)
+      .eq('id', args.shareLinkId)
       .maybeSingle<{ name: string | null }>(),
-    reviewLinkPostIds.length > 0
-      ? admin
-          .from('scheduled_posts')
-          .select('id, scheduled_at')
-          .in('id', reviewLinkPostIds)
-      : Promise.resolve({ data: [] as Array<{ id: string; scheduled_at: string | null }> }),
   ]);
   const drop = dropRes.data;
   if (!drop) return;
   const linkName = linkRes.data?.name?.trim() ?? '';
-
   const clientName = drop.clients?.name ?? 'Client';
+
   const chatWebhookUrl = await resolveTeamChatWebhook(admin, {
     primaryUrl: drop.clients?.chat_webhook_url ?? null,
     agency: drop.clients?.agency ?? null,
   });
-  // Reply rows still trigger an in-app bell ping with the "X replied to a
-  // comment" title; the chat side flows through the deferred coalesce cron
-  // (status='comment') so we don't post per-event cards from here.
-  const title = comment.isReply
-    ? REPLY_TITLE(comment.authorName, clientName)
-    : TITLE_BY_STATUS[comment.status](comment.authorName, clientName);
-  // Truncate only the in-app notification body, chat gets full content.
-  // Attachment-only comments have no text, so fall back to a file summary.
-  const preview = comment.content.trim()
-    ? comment.content.slice(0, 140) + (comment.content.length > 140 ? '…' : '')
-    : comment.attachments.length === 1
-      ? `📎 ${comment.attachments[0].filename}`
-      : `📎 ${comment.attachments.length} files attached`;
-  // In-app links go to the admin view; chat links go to the public share view
-  // so phones (mobile-blocked from /admin/*) can open them.
-  const linkPath = `/admin/calendar/${drop.id}`;
-  // Compute the index of the commented-on post within the share link's
-  // sorted list so the chat link can deep-link to it via `#post-N`.
-  // Mirrors `sortPostsForList` on the public page: scheduled_at ASC,
-  // nulls first, fall back to id for stability.
-  const allPosts = (allPostsRes.data ?? []) as Array<{ id: string; scheduled_at: string | null }>;
-  const sortedPostIds = [...allPosts]
-    .sort((a, b) => {
-      const aTime = a.scheduled_at ? new Date(a.scheduled_at).getTime() : -Infinity;
-      const bTime = b.scheduled_at ? new Date(b.scheduled_at).getTime() : -Infinity;
-      if (aTime !== bTime) return aTime - bTime;
-      return a.id.localeCompare(b.id);
-    })
-    .map((p) => p.id);
-  const postIndex = sortedPostIds.indexOf(comment.postId);
-  const postAnchor = postIndex >= 0 ? `#post-${postIndex + 1}` : '';
   const appBase = getCortexAppUrl(getBrandFromAgency(drop.clients?.agency ?? null));
-  const baseShareUrl = `${appBase}/s/${shareToken}`;
-  const shareUrl = `${baseShareUrl}${postAnchor}`;
-  // Paid-media team gets the dedicated download grid instead of the full
-  // review page, they only need to grab the assets, not browse captions.
-  const downloadUrl = `${appBase}/c/${shareToken}/download`;
+  const shareUrl = `${appBase}/s/${args.token}`;
+  const downloadUrl = `${appBase}/c/${args.token}/download`;
 
-  // In-app: every admin user gets the bell ping. Was previously hard-coded
-  // to jack@nativz.io, which meant no other editor on the team saw revision
-  // requests / approvals show up in the app, they had to be in the right
-  // Google Chat space, and if the client had no chat_webhook_url they got
-  // nothing at all. We pull `role='admin'` from `users` so the recipient
-  // list grows automatically as new editors join the team.
-  const { data: adminUsers } = await admin
-    .from('users')
-    .select('id')
-    .eq('role', 'admin');
-  for (const adminUser of adminUsers ?? []) {
-    const recipientId = (adminUser as { id: string }).id;
-    createNotification({
-      recipientUserId: recipientId,
-      type: 'general',
-      title,
-      body: preview,
-      linkPath,
-    }).catch(() => {});
-  }
-
-  // For approved-status events, claim the right to send the all-approved
-  // notifications atomically. Two concurrent approvers (or a single
-  // double-click) used to both pass a non-atomic "did everyone approve?"
-  // SELECT and post the celebration twice. Now: only the request that flips
-  // all_approved_notified_at NULL → timestamp wins and posts. The DELETE
-  // handler clears the stamp when an approval is removed, so re-approval can
-  // fire the ping again.
-  let allApprovedClaim: 'won' | 'lost' | 'not-yet' = 'not-yet';
-  if (comment.status === 'approved') {
-    const allApproved = await checkAllApproved(admin, reviewLinkMap);
-    if (allApproved) {
-      const { data: claimed } = await admin
-        .from('content_drop_share_links')
-        .update({ all_approved_notified_at: new Date().toISOString() })
-        .eq('id', shareLinkId)
-        .is('all_approved_notified_at', null)
-        .select('id')
-        .maybeSingle();
-      allApprovedClaim = claimed ? 'won' : 'lost';
-    }
-  }
-
-  // Google Chat: per-client space when set, otherwise the agency's
-  // miscellaneous-catchall client (resolved inside `resolveTeamChatWebhook`).
-  // Client-comment notifications never fall back to OPS, that space is
-  // reserved for system-level alerts (cron failures, post-health). Brands
-  // without a per-client webhook AND no agency catchall silently no-op.
-  //
-  // - comment / changes_requested → DEFERRED. `chat_notified_at` stays NULL
-  //   on the row; `/api/cron/coalesce-review-pings` batches every pending
-  //   revision per share-link into a single card once activity has settled
-  //   for 20 min. Stops the "five quick revision notes = five back-to-back
-  //   chat cards" spam that the old fire-on-insert path produced.
-  // - approved → post 🎉 once every post in this share link is approved.
-  const targetWebhookUrl = chatWebhookUrl;
-  if (targetWebhookUrl) {
-    if (allApprovedClaim === 'won') {
-      const approvedSetting = await getClientNotificationSetting(
-        'calendar_all_approved_chat',
-        'chat',
-        drop.client_id,
+  if (chatWebhookUrl) {
+    const approvedSetting = await getClientNotificationSetting(
+      'calendar_all_approved_chat',
+      'chat',
+      drop.client_id,
+    );
+    if (approvedSetting.enabled) {
+      const reviewLinkIds = Object.values(args.reviewLinkMap);
+      const subject = linkName ? `${clientName} · ${linkName}` : `${clientName}'s calendar`;
+      postToGoogleChatSafe(
+        chatWebhookUrl,
+        buildChatCard({
+          cardId: `all-approved-${args.dropId}`,
+          headerTitle: `🎉 All ${reviewLinkIds.length} posts approved`,
+          headerSubtitle: subject,
+          sections: [
+            {
+              widgets: [
+                {
+                  type: 'text',
+                  text: 'Calendar is locked; posts will publish on their scheduled times. No team action needed.',
+                },
+                { type: 'button', text: 'Open calendar', url: shareUrl, filled: true },
+              ],
+            },
+          ],
+          fallbackText: `🎉 ${subject}, client approved all ${reviewLinkIds.length} posts. ${shareUrl}`,
+        }),
+        `all-approved ${args.dropId}`,
       );
-      if (approvedSetting.enabled) {
-        const reviewLinkIds = Object.values(reviewLinkMap);
-        const subject = linkName
-          ? `${clientName} · ${linkName}`
-          : `${clientName}'s calendar`;
-        postToGoogleChatSafe(
-          targetWebhookUrl,
-          buildChatCard({
-            cardId: `all-approved-${dropId}`,
-            headerTitle: `🎉 All ${reviewLinkIds.length} posts approved`,
-            headerSubtitle: subject,
-            sections: [
-              {
-                widgets: [
-                  {
-                    type: 'text',
-                    text: 'Calendar is locked; posts will publish on their scheduled times. No team action needed.',
-                  },
-                  { type: 'button', text: 'Open calendar', url: shareUrl, filled: true },
-                ],
-              },
-            ],
-            fallbackText: `🎉 ${subject}, client approved all ${reviewLinkIds.length} posts. ${shareUrl}`,
-          }),
-          `all-approved ${dropId}`,
-        );
-      }
     }
   }
 
-  // Paid-media team ping: gated on the same atomic claim so the team space
-  // doesn't double-fire either.
-  if (allApprovedClaim === 'won') {
-    try {
-      await pingPaidMediaTeam(admin, {
-        clientId: drop.client_id,
-        clientName,
-        startDate: drop.start_date,
-        shareUrl: downloadUrl,
-      });
-    } catch (err) {
-      console.error('Paid-media team ping failed:', err);
-    }
+  try {
+    await pingPaidMediaTeam(admin, {
+      clientId: drop.client_id,
+      clientName,
+      startDate: drop.start_date,
+      shareUrl: downloadUrl,
+    });
+  } catch (err) {
+    console.error('Paid-media team ping failed:', err);
   }
 }
 
-/**
- * Ping the paid-media team's Google Chat space when a calendar gets the
- * all-clear. NAT-66: prefer per-client `clients.paid_media_webhook_url`
- * over the legacy hard-coded map. The Monday folder enrichment only runs
- * when we resolved via the legacy map, since that path needs Monday for
- * the items board anyway.
- */
 async function pingPaidMediaTeam(
   admin: ReturnType<typeof createAdminClient>,
   args: {
@@ -912,9 +447,6 @@ async function pingPaidMediaTeam(
     return;
   }
 
-  // DB-driven path: drop the ads team straight onto the dedicated
-  // download grid (caller wires `args.shareUrl` to the /download URL) so
-  // they can pull every approved asset in one click.
   postToGoogleChatSafe(
     paidMedia.url,
     buildChatCard({
@@ -952,12 +484,6 @@ async function checkAllApproved(
   return reviewLinkIds.every((id) => approvedSet.has(id));
 }
 
-/**
- * Posts a Jack-only summary to the client's Google Chat webhook describing
- * any past-due posts that were shifted into the current month, plus overflow
- * posts that didn't fit. Never goes to the client. Silently no-ops if neither
- * a per-client webhook nor an agency misc-catchall is configured.
- */
 async function notifyPastDueFixup(
   admin: ReturnType<typeof createAdminClient>,
   dropId: string,
@@ -1029,4 +555,3 @@ async function notifyPastDueFixup(
     `past-due-fixup ${dropId}`,
   );
 }
-

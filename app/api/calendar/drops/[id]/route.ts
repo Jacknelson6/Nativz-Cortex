@@ -21,7 +21,7 @@ interface CommentRow {
   review_link_id: string;
   author_name: string;
   content: string;
-  status: 'approved' | 'changes_requested' | 'comment' | 'caption_edit';
+  status: 'approved' | 'comment' | 'caption_edit' | 'tag_edit' | 'cover_edit' | 'schedule_change' | 'video_revised';
   created_at: string;
   caption_before: string | null;
   caption_after: string | null;

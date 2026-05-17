@@ -212,8 +212,8 @@ export function CalendarLinkDetail({
    * Called after a successful "Mark all approved" bulk action so the
    * parent table can flip the counts + status pill without a refetch.
    * Status comes back as the optimistic next state ("approved" when
-   * everything got through, "revising" when changes_requested rows
-   * remain, "ready_for_review" otherwise).
+   * everything got through, "revising" when comment rows remain,
+   * "ready_for_review" otherwise).
    */
   onApprovedAll?: (patch: {
     approved_count: number;

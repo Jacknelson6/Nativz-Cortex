@@ -4,7 +4,7 @@ export type { SocialPlatform } from '@/lib/posting/types';
 export type PostStatus = 'draft' | 'scheduled' | 'publishing' | 'published' | 'partially_failed' | 'failed';
 export type PlatformPostStatus = 'pending' | 'publishing' | 'published' | 'failed';
 export type PostType = 'reel' | 'short' | 'video';
-export type ReviewCommentStatus = 'approved' | 'changes_requested' | 'comment';
+export type ReviewCommentStatus = 'approved' | 'comment';
 
 export interface SocialProfileRow {
   id: string;
@@ -110,7 +110,7 @@ export interface ScheduledPostWithDetails extends ScheduledPostRow {
     scheduler_media: SchedulerMediaRow;
   })[];
   review_links: PostReviewLinkRow[];
-  review_status: 'none' | 'pending' | 'approved' | 'changes_requested';
+  review_status: 'none' | 'pending' | 'approved' | 'revising';
 }
 
 export interface CalendarPost {
@@ -123,5 +123,5 @@ export interface CalendarPost {
   cover_image_url: string | null;
   thumbnail_url: string | null;
   platforms: SocialPlatform[];
-  review_status: 'none' | 'pending' | 'approved' | 'changes_requested';
+  review_status: 'none' | 'pending' | 'approved' | 'revising';
 }

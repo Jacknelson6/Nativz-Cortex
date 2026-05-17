@@ -106,20 +106,28 @@ export async function GET(
 
   type ReviewRow = {
     video_id: string | null;
-    status: 'approved' | 'changes_requested' | 'comment' | 'video_revised';
-    metadata: Record<string, unknown> | null;
+    status: 'approved' | 'comment' | 'video_revised';
   };
-  const reviewByVideo = new Map<string, 'approved' | 'changes_requested'>();
+  // Build per-video comment lists (query is newest-first) then derive status.
+  const commentsByVideo = new Map<string, ReviewRow[]>();
   for (const c of (reviewComments ?? []) as ReviewRow[]) {
-    if (!c.video_id || reviewByVideo.has(c.video_id)) continue;
-    if (c.status === 'comment' || c.status === 'video_revised') continue;
-    if (
-      c.status === 'changes_requested' &&
-      (c.metadata as { resolved?: boolean } | null)?.resolved
-    ) {
-      continue;
+    if (!c.video_id) continue;
+    const list = commentsByVideo.get(c.video_id) ?? [];
+    list.push(c);
+    commentsByVideo.set(c.video_id, list);
+  }
+  const reviewByVideo = new Map<string, 'approved' | 'revising'>();
+  for (const [videoId, rows] of commentsByVideo) {
+    let lastApprovalIdx = -1;
+    for (let i = rows.length - 1; i >= 0; i--) {
+      if (rows[i].status === 'approved') { lastApprovalIdx = i; break; }
     }
-    reviewByVideo.set(c.video_id, c.status);
+    for (let i = rows.length - 1; i >= 0; i--) {
+      const s = rows[i].status;
+      if (s === 'video_revised') continue;
+      if (s === 'approved') { reviewByVideo.set(videoId, 'approved'); break; }
+      if (s === 'comment' && i > lastApprovalIdx) { reviewByVideo.set(videoId, 'revising'); break; }
+    }
   }
 
   const videosWithStatus: EditingProjectVideo[] = (videos ?? []).map(

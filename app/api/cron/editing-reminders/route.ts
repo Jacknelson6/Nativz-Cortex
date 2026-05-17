@@ -304,7 +304,7 @@ async function hasClientActivitySince(
     .from('editing_project_review_comments')
     .select('id', { count: 'exact', head: true })
     .eq('share_link_id', shareLinkId)
-    .in('status', ['approved', 'changes_requested', 'comment'])
+    .in('status', ['approved', 'comment'])
     .gt('created_at', since);
   return (count ?? 0) > 0;
 }

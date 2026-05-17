@@ -9,8 +9,8 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
-type ReviewStatus = 'approved' | 'changes_requested' | 'comment';
-type CommentStatus = ReviewStatus | 'caption_edit';
+type ReviewStatus = 'approved' | 'revising' | null;
+type CommentStatus = 'approved' | 'comment' | 'caption_edit' | 'tag_edit' | 'cover_edit' | 'schedule_change' | 'video_revised';
 
 interface DropComment {
   id: string;
@@ -192,10 +192,17 @@ function DropStatusPill({ status }: { status: 'ready' | 'scheduled' }) {
   );
 }
 
-function latestReview(comments: DropComment[]): ReviewStatus | null {
+function latestReview(comments: DropComment[]): ReviewStatus {
+  const ACTIVITY = new Set<CommentStatus>(['caption_edit', 'tag_edit', 'cover_edit', 'schedule_change', 'video_revised']);
+  let lastApprovalIdx = -1;
+  for (let i = comments.length - 1; i >= 0; i--) {
+    if (comments[i].status === 'approved') { lastApprovalIdx = i; break; }
+  }
   for (let i = comments.length - 1; i >= 0; i--) {
     const c = comments[i];
-    if (c.status === 'approved' || c.status === 'changes_requested') return c.status;
+    if (ACTIVITY.has(c.status)) continue;
+    if (c.status === 'approved') return 'approved';
+    if (c.status === 'comment' && i > lastApprovalIdx) return 'revising';
   }
   return null;
 }
@@ -253,7 +260,7 @@ function PostCard({
                 <CheckCircle size={11} /> Approved
               </span>
             )}
-            {review === 'changes_requested' && (
+            {review === 'revising' && (
               <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-300">
                 <AlertTriangle size={11} /> Changes requested
               </span>
@@ -296,19 +303,15 @@ function CommentRow({ comment }: { comment: DropComment }) {
   const tone =
     comment.status === 'approved'
       ? 'text-emerald-300'
-      : comment.status === 'changes_requested'
-        ? 'text-amber-300'
-        : comment.status === 'caption_edit'
-          ? 'text-accent-text'
-          : 'text-text-secondary';
+      : comment.status === 'caption_edit'
+        ? 'text-accent-text'
+        : 'text-text-secondary';
   const Icon =
     comment.status === 'approved'
       ? CheckCircle
-      : comment.status === 'changes_requested'
-        ? AlertTriangle
-        : comment.status === 'caption_edit'
-          ? Type
-          : MessageSquare;
+      : comment.status === 'caption_edit'
+        ? Type
+        : MessageSquare;
   const time = new Date(comment.created_at).toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',

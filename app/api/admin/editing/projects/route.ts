@@ -193,9 +193,9 @@ export async function GET(req: Request) {
         .order('version', { ascending: false }),
       admin
         .from('editing_project_review_comments')
-        .select('video_id, status, metadata, created_at')
+        .select('video_id, status, created_at')
         .in('project_id', projectIds)
-        .in('status', ['approved', 'changes_requested'])
+        .in('status', ['approved', 'comment', 'video_revised'])
         .order('created_at', { ascending: true }),
     ]);
     const videoToProject = new Map<string, string>();
@@ -218,30 +218,23 @@ export async function GET(req: Request) {
       arr.push(v.id);
       projectToVideos.set(v.project_id, arr);
     }
-    const byVideo = new Map<
-      string,
-      Array<{ status: string; metadata: Record<string, unknown> | null; created_at: string }>
-    >();
-    for (const c of (commentRows ?? []) as Array<{
-      video_id: string;
-      status: string;
-      metadata: Record<string, unknown> | null;
-      created_at: string;
-    }>) {
+    const byVideo = new Map<string, Array<{ status: string }>>();
+    for (const c of (commentRows ?? []) as Array<{ video_id: string; status: string }>) {
       const arr = byVideo.get(c.video_id) ?? [];
-      arr.push({ status: c.status, metadata: c.metadata, created_at: c.created_at });
+      arr.push({ status: c.status });
       byVideo.set(c.video_id, arr);
     }
-    function latestReview(
-      rows: Array<{ status: string; metadata: Record<string, unknown> | null }>,
-    ): 'approved' | 'changes_requested' | null {
+    const ACTIVITY = new Set(['video_revised']);
+    function latestReview(rows: Array<{ status: string }>): 'approved' | 'revising' | null {
+      let lastApprovalIdx = -1;
       for (let i = rows.length - 1; i >= 0; i--) {
-        const r = rows[i];
-        if (r.status === 'approved') return 'approved';
-        if (r.status === 'changes_requested') {
-          const resolved = !!(r.metadata && (r.metadata as Record<string, unknown>).resolved);
-          if (!resolved) return 'changes_requested';
-        }
+        if (rows[i].status === 'approved') { lastApprovalIdx = i; break; }
+      }
+      for (let i = rows.length - 1; i >= 0; i--) {
+        const s = rows[i].status;
+        if (ACTIVITY.has(s)) continue;
+        if (s === 'approved') return 'approved';
+        if (s === 'comment' && i > lastApprovalIdx) return 'revising';
       }
       return null;
     }
@@ -253,7 +246,7 @@ export async function GET(req: Request) {
       for (const vid of vids) {
         const s = latestReview(byVideo.get(vid) ?? []);
         if (s === 'approved') approved += 1;
-        else if (s === 'changes_requested') changes += 1;
+        else if (s === 'revising') changes += 1;
         else pending += 1;
       }
       reviewCounts.set(pid, { approved, changes, pending, total: vids.length });

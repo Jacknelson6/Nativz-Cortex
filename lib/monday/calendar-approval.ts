@@ -137,7 +137,7 @@ export async function computeApprovalLabel(
       .from('post_review_comments')
       .select('review_link_id, status, created_at')
       .in('review_link_id', ids)
-      .in('status', ['approved', 'changes_requested'])
+      .in('status', ['approved', 'comment'])
       .returns<{ review_link_id: string; status: string; created_at: string }[]>(),
     admin
       .from('post_review_links')
@@ -158,15 +158,15 @@ export async function computeApprovalLabel(
   ]);
   const anyNotifyPending = (notifyRows ?? []).length > 0;
 
-  // For each review link, capture the newest approval and newest changes-requested
-  // comment, plus the revisions_completed_at marker.
+  // For each review link, capture the newest approval and newest comment,
+  // plus the revisions_completed_at marker.
   const newestApprovedAt = new Map<string, string>();
   const newestChangesAt = new Map<string, string>();
   for (const c of comments ?? []) {
     if (c.status === 'approved') {
       const prev = newestApprovedAt.get(c.review_link_id);
       if (!prev || c.created_at > prev) newestApprovedAt.set(c.review_link_id, c.created_at);
-    } else if (c.status === 'changes_requested') {
+    } else if (c.status === 'comment') {
       const prev = newestChangesAt.get(c.review_link_id);
       if (!prev || c.created_at > prev) newestChangesAt.set(c.review_link_id, c.created_at);
     }
@@ -182,7 +182,7 @@ export async function computeApprovalLabel(
     const changesAt = newestChangesAt.get(id) ?? null;
     const revAt = revisedAt.get(id) ?? null;
 
-    // Open changes = newest changes_requested with no superseding approval
+    // Open changes = newest comment with no superseding approval
     // and no revision marker after it.
     const changesSuperseded =
       changesAt &&

@@ -14,7 +14,7 @@ export async function previewCalendarCommentDigest(
         comments: [
           {
             authorName: 'Megan Reed',
-            status: 'changes_requested' as const,
+            status: 'comment' as const,
             captionPreview: 'Spring drop preview — first walk-through of the…',
             contentPreview:
               'Can we swap out the 3rd clip for one that shows the texture better? Also caption needs to call out the linen blend.',
@@ -47,11 +47,10 @@ export async function previewCalendarCommentDigest(
 
   const totalComments = sample.groups.reduce((sum, g) => sum + g.comments.length, 0);
   const subject = `${totalComments} content calendar ${totalComments === 1 ? 'comment' : 'comments'} · ${sample.windowLabel}`;
-  const verbByStatus = {
+  const verbByStatus: Record<string, string> = {
     approved: 'approved',
-    changes_requested: 'requested changes',
     comment: 'commented',
-  } as const;
+  };
 
   const sections = sample.groups
     .map((g) => {

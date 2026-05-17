@@ -13,7 +13,7 @@ import { syncMondayApprovalForDrop } from '@/lib/monday/calendar-approval';
  *
  * Admin-only. Stamps `revisions_completed_at` on every `post_review_links`
  * row tied to this post (across all share links for the drop). When this
- * resolves the last open `changes_requested` in the drop, fires the
+ * resolves the last open revision comment in the drop, fires the
  * `calendar_revisions_complete` event email to portal users for the client.
  */
 export async function POST(
@@ -67,7 +67,7 @@ export async function POST(
     return NextResponse.json({ error: updateErr.message }, { status: 500 });
   }
 
-  // Are there still posts in this drop with open changes_requested?
+  // Are there still posts in this drop with open revision comments?
   const allOutstanding = await getOutstandingPosts(admin, dropId);
   const dropFullyClean = allOutstanding.length === 0;
 
@@ -78,8 +78,8 @@ export async function POST(
       dropId,
       shareLinks: shareLinks ?? [],
     });
-    // Clear the ops "revisions overdue" stamp so the next round of
-    // changes_requested can re-trigger an alert if we sit on it.
+    // Clear the ops "revisions overdue" stamp so the next revision comment
+    // can re-trigger an alert if we sit on it.
     await admin
       .from('content_drop_share_links')
       .update({ revisions_ops_nudged_at: null })
@@ -107,7 +107,7 @@ async function getOutstandingPosts(
   admin: ReturnType<typeof createAdminClient>,
   dropId: string,
 ): Promise<string[]> {
-  // Posts whose newest changes_requested comment is newer than their
+  // Posts whose newest 'comment' row is newer than their
   // revisions_completed_at marker (or whose marker is null).
   const { data: links } = await admin
     .from('content_drop_share_links')
@@ -138,7 +138,7 @@ async function getOutstandingPosts(
   const { data: latestChanges } = await admin
     .from('post_review_comments')
     .select('review_link_id, created_at')
-    .eq('status', 'changes_requested')
+    .eq('status', 'comment')
     .in('review_link_id', reviewLinkIds)
     .order('created_at', { ascending: false });
 

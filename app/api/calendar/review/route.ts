@@ -169,16 +169,19 @@ export async function GET(req: Request) {
   }
 
   // Step 5: aggregate per-link status.
-  // Per-post status walks comments newest→oldest, skipping resolved
-  // changes_requested rows (mirrors `latestReview()` in /c/[token]).
-  function postStatus(comments: CommentRow[]): 'approved' | 'changes_requested' | null {
+  // Per-post status mirrors latestReview() in /c/[token]: newest comment
+  // that is not an activity event determines the state.
+  const ACTIVITY = new Set(['caption_edit', 'tag_edit', 'cover_edit', 'schedule_change', 'video_revised']);
+  function postStatus(comments: CommentRow[]): 'approved' | 'revising' | null {
+    let lastApprovalIdx = -1;
+    for (let i = comments.length - 1; i >= 0; i--) {
+      if (comments[i].status === 'approved') { lastApprovalIdx = i; break; }
+    }
     for (let i = comments.length - 1; i >= 0; i--) {
       const c = comments[i];
+      if (ACTIVITY.has(c.status)) continue;
       if (c.status === 'approved') return 'approved';
-      if (c.status === 'changes_requested') {
-        const resolved = !!(c.metadata && (c.metadata as Record<string, unknown>).resolved);
-        if (!resolved) return 'changes_requested';
-      }
+      if (c.status === 'comment' && i > lastApprovalIdx) return 'revising';
     }
     return null;
   }
@@ -232,7 +235,7 @@ export async function GET(req: Request) {
         const mt = mediaTypeByPostId.get(postId) ?? 'video';
         if (mt === 'image') approvedImageCount += 1;
         else approvedVideoCount += 1;
-      } else if (s === 'changes_requested') changesCount += 1;
+      } else if (s === 'revising') changesCount += 1;
       else pendingCount += 1;
     }
 

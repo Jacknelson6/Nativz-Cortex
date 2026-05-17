@@ -19,7 +19,7 @@ type CommentRow = {
   review_link_id: string;
   author_name: string;
   content: string;
-  status: 'approved' | 'changes_requested' | 'comment';
+  status: 'approved' | 'comment';
   created_at: string;
   post_review_links: {
     post_id: string;
@@ -37,7 +37,7 @@ type EditingCommentRow = {
   share_link_id: string | null;
   author_name: string;
   content: string;
-  status: 'approved' | 'changes_requested' | 'comment' | 'video_revised';
+  status: 'approved' | 'comment' | 'video_revised';
   created_at: string;
   project_id: string;
   editing_projects: {
@@ -129,7 +129,7 @@ async function handleGet(request: NextRequest) {
         editing_project_videos ( id, filename )
       `)
       .gte('created_at', since)
-      .in('status', ['approved', 'changes_requested', 'comment'])
+      .in('status', ['approved', 'comment'])
       .order('created_at', { ascending: true })
       .returns<EditingCommentRow[]>(),
   ]);

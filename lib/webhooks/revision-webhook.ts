@@ -7,13 +7,12 @@ export interface RevisionPayload {
   postCaption: string;
   reviewerName: string;
   comment: string;
-  status: 'approved' | 'changes_requested' | 'comment';
+  status: 'approved' | 'comment';
   postUrl?: string;
 }
 
 const STATUS_LABELS: Record<string, string> = {
   approved: '✅ Approved',
-  changes_requested: '⚠️ Changes requested',
   comment: '💬 Comment',
 };
 

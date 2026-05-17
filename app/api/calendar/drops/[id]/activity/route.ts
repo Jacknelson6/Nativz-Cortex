@@ -19,7 +19,7 @@ export const dynamic = 'force-dynamic';
  *                         etc.) that the dialog opens in the email replay.
  *                         Failed sends still come from `email_messages` —
  *                         they never made it into the archive.
- *   - review_comment    ← approve / changes_requested / video_revised /
+ *   - review_comment    ← approve / comment / video_revised /
  *                         comment from `post_review_comments` (joined to
  *                         this drop via the share-link review_link_map).
  *                         Chat-webhook pings are paired 1:1 with these
@@ -55,7 +55,7 @@ type Activity =
       at: string;
       detail: {
         author_name: string;
-        status: 'approved' | 'changes_requested' | 'comment' | 'video_revised';
+        status: 'approved' | 'comment' | 'video_revised';
         content: string;
         video_id: string | null;
         attachment_count: number;
@@ -160,7 +160,7 @@ export async function GET(
               'id, review_link_id, author_name, content, status, attachments, created_at',
             )
             .in('review_link_id', reviewLinkIds)
-            .in('status', ['approved', 'changes_requested', 'comment', 'video_revised'])
+            .in('status', ['approved', 'comment', 'video_revised'])
             .order('created_at', { ascending: false })
             .limit(200)
         : Promise.resolve({
@@ -248,7 +248,7 @@ export async function GET(
   type CommentRow = {
     author_name: string;
     content: string;
-    status: 'approved' | 'changes_requested' | 'comment' | 'video_revised';
+    status: 'approved' | 'comment' | 'video_revised';
     attachments: unknown;
     created_at: string;
   };

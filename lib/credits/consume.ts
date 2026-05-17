@@ -35,8 +35,8 @@ export interface ConsumeCreditArgs {
   editorUserId?: string | null;
   /**
    * Number of revision cycles before approval. 0 = approved on first send.
-   * The caller computes this (typically by counting prior `changes_requested`
-   * comments on the same review_link_id) since the RPC doesn't have that
+   * The caller computes this (typically by counting prior `comment`
+   * rows on the same review_link_id) since the RPC doesn't have that
    * context.
    */
   revisionCount?: number;

@@ -288,10 +288,7 @@ function firstName(full: string | null | undefined): string {
 /**
  * True if any reviewer comment exists on a post in this link since
  * `since`. Reviewer activity = any row in `post_review_comments` with
- * status approved / changes_requested / comment, joined through
- * `post_review_links`. Editor force-approve writes the same shape, but
- * those are rare and the cadence cancelling on them is the conservative
- * behaviour anyway.
+ * status approved / comment, joined through `post_review_links`.
  */
 async function hasClientActivitySince(
   admin: ReturnType<typeof createAdminClient>,
@@ -302,7 +299,7 @@ async function hasClientActivitySince(
   const { count } = await admin
     .from('post_review_comments')
     .select('id, post_review_links!inner(post_id)', { count: 'exact', head: true })
-    .in('status', ['approved', 'changes_requested', 'comment'])
+    .in('status', ['approved', 'comment'])
     .in('post_review_links.post_id', postIds)
     .gt('created_at', since);
   return (count ?? 0) > 0;
@@ -321,53 +318,38 @@ async function countPendingPosts(
 
   type Row = {
     created_at: string;
-    status: 'approved' | 'changes_requested';
+    status: 'approved' | 'comment';
     post_review_links:
-      | { post_id: string; revisions_completed_at: string | null }
-      | { post_id: string; revisions_completed_at: string | null }[]
+      | { post_id: string }
+      | { post_id: string }[]
       | null;
   };
   const { data } = await admin
     .from('post_review_comments')
-    .select('created_at, status, post_review_links!inner(post_id, revisions_completed_at)')
-    .in('status', ['approved', 'changes_requested'])
+    .select('created_at, status, post_review_links!inner(post_id)')
+    .in('status', ['approved', 'comment'])
     .in('post_review_links.post_id', postIds)
     .order('created_at', { ascending: false })
     .returns<Row[]>();
 
-  const latestByPost = new Map<
-    string,
-    { status: 'approved' | 'changes_requested'; created_at: string; revisions_completed_at: string | null }
-  >();
+  const latestByPost = new Map<string, 'approved' | 'comment'>();
   let hasRevisionFeedback = false;
   for (const row of data ?? []) {
     const link = Array.isArray(row.post_review_links)
       ? row.post_review_links[0] ?? null
       : row.post_review_links;
     if (!link) continue;
-    if (row.status === 'changes_requested') hasRevisionFeedback = true;
+    if (row.status === 'comment') hasRevisionFeedback = true;
     if (latestByPost.has(link.post_id)) continue;
-    latestByPost.set(link.post_id, {
-      status: row.status,
-      created_at: row.created_at,
-      revisions_completed_at: link.revisions_completed_at,
-    });
+    latestByPost.set(link.post_id, row.status);
   }
 
   let pending = 0;
   for (const id of postIds) {
     const latest = latestByPost.get(id);
-    if (!latest) {
+    if (!latest || latest === 'comment') {
       pending += 1;
-      continue;
     }
-    if (latest.status === 'approved') continue;
-    const completedAt = latest.revisions_completed_at;
-    if (!completedAt || new Date(latest.created_at) > new Date(completedAt)) {
-      // changes_requested with no revision-complete marker → ours, not theirs
-      continue;
-    }
-    pending += 1;
   }
 
   return { pending, total, hasRevisionFeedback };
