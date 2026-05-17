@@ -1,5 +1,15 @@
 import { notFound } from 'next/navigation';
-import { Plug, Instagram, Music2, Youtube, Facebook, Globe, Linkedin, Twitter } from 'lucide-react';
+import {
+  Plug,
+  Instagram,
+  Music2,
+  Youtube,
+  Facebook,
+  Linkedin,
+  Twitter,
+  Webhook,
+  Megaphone,
+} from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { SettingsPageHeader } from '@/components/clients/settings/settings-primitives';
@@ -43,8 +53,8 @@ const PLATFORM_META: Record<string, { label: string; icon: LucideIcon }> = {
 };
 
 function connectedHint(account: SocialAccount | undefined): string | undefined {
-  if (!account) return 'Not connected';
-  const parts: string[] = [];
+  if (!account || !account.handle) return 'Not connected';
+  const parts: string[] = [`@${account.handle}`];
   if (account.connected_via) parts.push(`via ${account.connected_via}`);
   if (account.connected_at) {
     const ts = new Date(account.connected_at).getTime();
@@ -58,7 +68,32 @@ function connectedHint(account: SocialAccount | undefined): string | undefined {
       else parts.push(new Date(account.connected_at).toLocaleDateString());
     }
   }
-  return parts.join(' · ') || undefined;
+  return parts.join(' · ');
+}
+
+function StatusPill({ status }: { status: SocialAccount['connection_status'] | null }) {
+  if (status === 'connected') {
+    return (
+      <span className="shrink-0 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
+        Connected
+      </span>
+    );
+  }
+  if (status === 'pending') {
+    return (
+      <span className="shrink-0 rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] font-medium text-amber-300">
+        Pending
+      </span>
+    );
+  }
+  if (status === 'error') {
+    return (
+      <span className="shrink-0 rounded-full border border-red-400/30 bg-red-500/10 px-2 py-0.5 text-[10px] font-medium text-red-300">
+        Error
+      </span>
+    );
+  }
+  return null;
 }
 
 function maskKey(value: string | null): string | null {
@@ -110,36 +145,15 @@ export default async function ProfileIntegrationsPage({
       >
         {Object.entries(PLATFORM_META).map(([key, meta]) => {
           const account = accountsByPlatform.get(key);
-          const Icon = meta.icon;
-          const isConnected = account?.connection_status === 'connected';
           return (
             <WorkspaceRow
               key={key}
+              icon={meta.icon}
               label={meta.label}
               hint={connectedHint(account)}
               rightSlot={
-                <div className="flex w-full items-center justify-between gap-3">
-                  <div className="min-w-0 flex items-center gap-2">
-                    {account?.handle ? (
-                      <>
-                        <Icon size={14} className="text-text-muted shrink-0" />
-                        <span className="font-mono text-xs truncate text-text-primary">
-                          @{account.handle}
-                        </span>
-                        {isConnected ? (
-                          <span className="shrink-0 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
-                            Connected
-                          </span>
-                        ) : account?.connection_status ? (
-                          <span className="shrink-0 rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] font-medium text-amber-300">
-                            {account.connection_status}
-                          </span>
-                        ) : null}
-                      </>
-                    ) : (
-                      <span className="text-xs italic text-text-muted">Not connected</span>
-                    )}
-                  </div>
+                <>
+                  <StatusPill status={account?.connection_status ?? null} />
                   <SocialAccountEditor
                     clientId={client.id}
                     platform={key}
@@ -150,7 +164,7 @@ export default async function ProfileIntegrationsPage({
                       connected_via: account?.connected_via ?? null,
                     }}
                   />
-                </div>
+                </>
               }
             />
           );
@@ -163,23 +177,19 @@ export default async function ProfileIntegrationsPage({
         action={<UpPromoteEditor clientId={client.id} connected={upPromoteConnected} />}
       >
         <WorkspaceRow
+          icon={Megaphone}
           label="UpPromote"
+          hint={
+            upPromoteConnected
+              ? `${maskKey(client.uppromote_api_key)} · pulls affiliate data nightly`
+              : 'Not connected'
+          }
           rightSlot={
-            <div className="flex items-center gap-2">
-              {upPromoteConnected ? (
-                <>
-                  <Globe size={14} className="text-text-muted" />
-                  <span className="font-mono text-xs text-text-secondary">
-                    {maskKey(client.uppromote_api_key)}
-                  </span>
-                  <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
-                    Connected
-                  </span>
-                </>
-              ) : (
-                <span className="text-xs italic text-text-muted">Not connected</span>
-              )}
-            </div>
+            upPromoteConnected ? (
+              <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
+                Connected
+              </span>
+            ) : null
           }
         />
       </WorkspaceSection>
@@ -199,22 +209,22 @@ export default async function ProfileIntegrationsPage({
         }
       >
         <WorkspaceRow
+          icon={Webhook}
           label="Chat"
           hint="Fires on every approval comment + new drop"
-          value={client.chat_webhook_url}
-          mono
+          value={client.chat_webhook_url ? '••• webhook set' : null}
         />
         <WorkspaceRow
+          icon={Webhook}
           label="Revisions"
           hint="Fires on revision-requested events"
-          value={client.revision_webhook_url}
-          mono
+          value={client.revision_webhook_url ? '••• webhook set' : null}
         />
         <WorkspaceRow
+          icon={Webhook}
           label="Paid media"
           hint="Fires when a drop is all-clear for paid"
-          value={client.paid_media_webhook_url}
-          mono
+          value={client.paid_media_webhook_url ? '••• webhook set' : null}
         />
       </WorkspaceSection>
     </>
