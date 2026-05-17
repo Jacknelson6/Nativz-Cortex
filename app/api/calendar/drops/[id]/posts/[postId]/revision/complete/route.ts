@@ -7,6 +7,7 @@ import { getClientNotificationSetting } from '@/lib/notifications/get-client-set
 import { getBrandFromAgency } from '@/lib/agency/detect';
 import { getCortexAppUrl } from '@/lib/agency/cortex-url';
 import { syncMondayApprovalForDrop } from '@/lib/monday/calendar-approval';
+import { archiveShareLinkEmail } from '@/lib/content-tools/archive-share-email';
 
 /**
  * POST /api/calendar/drops/[id]/posts/[postId]/revision/complete
@@ -77,6 +78,7 @@ export async function POST(
       admin,
       dropId,
       shareLinks: shareLinks ?? [],
+      sentBy: user.id,
     });
     // Clear the ops "revisions overdue" stamp so the next revision comment
     // can re-trigger an alert if we sit on it.
@@ -174,6 +176,7 @@ async function maybeSendRevisionsCompleteEmail(opts: {
   admin: ReturnType<typeof createAdminClient>;
   dropId: string;
   shareLinks: unknown[];
+  sentBy: string | null;
 }): Promise<boolean> {
   // Pull client info from the first share link (all share links belong to the same drop/client).
   const first = opts.shareLinks[0] as ShareLinkWithClient | undefined;
@@ -208,7 +211,7 @@ async function maybeSendRevisionsCompleteEmail(opts: {
   );
   if (recipients.length === 0) return false;
 
-  await Promise.all(
+  const sendResults = await Promise.all(
     recipients.map((to) =>
       sendCalendarRevisionsCompleteEmail({
         to,
@@ -220,5 +223,33 @@ async function maybeSendRevisionsCompleteEmail(opts: {
       }),
     ),
   );
+
+  // Best-effort: archive one row per share link in the drop so the unified
+  // review modal can replay "what was actually said" + stamp the touch
+  // timestamp so the Last touch column in /admin/calendar reflects this
+  // correspondence.
+  const subject = 'Your revisions are ready to review';
+  const html = sendResults.find((r) => r?.html)?.html ?? '';
+  const stampIso = new Date().toISOString();
+  const archiveRecipients = recipients.map((email) => ({ email, name: null }));
+  const shareLinkRows = (opts.shareLinks ?? []) as Array<{ id: string }>;
+
+  await Promise.all(
+    shareLinkRows.map(async (link) => {
+      await archiveShareLinkEmail(opts.admin, {
+        shareLinkId: link.id,
+        kind: 'revisions_complete',
+        subject,
+        htmlBody: html,
+        recipients: archiveRecipients,
+        sentBy: opts.sentBy,
+      });
+      await opts.admin
+        .from('content_drop_share_links')
+        .update({ last_sent_at: stampIso })
+        .eq('id', link.id);
+    }),
+  );
+
   return true;
 }

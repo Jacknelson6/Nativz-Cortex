@@ -38,6 +38,7 @@ import {
   clearGuestName,
 } from '@/components/share/gateway-modal';
 import { RoleChip } from '@/components/share/role-chip';
+import { AdminSendShareButton } from '@/components/share/admin-send-share-button';
 import {
   AttachmentChip,
   CommentAttachmentTile,
@@ -772,6 +773,14 @@ function SharedReviewView({
                     {viewAsClient ? 'Team view' : 'View as client'}
                   </span>
                 </button>
+              )}
+              {data.isEditor && (
+                <AdminSendShareButton
+                  surface="editing"
+                  previewUrl={`/api/admin/editing/projects/${data.project.id}/share/${data.share_link.id}/email`}
+                  sendUrl={`/api/admin/editing/projects/${data.project.id}/share/${data.share_link.id}/email`}
+                  onSent={() => void refetch()}
+                />
               )}
               {total > 0 && (
                 <ShareTourLaunchButton storageKey={EDIT_TOUR_STORAGE_KEY} />

@@ -29,6 +29,7 @@ import {
   clearGuestName,
 } from '@/components/share/gateway-modal';
 import { RoleChip } from '@/components/share/role-chip';
+import { AdminSendShareButton } from '@/components/share/admin-send-share-button';
 import {
   AttachmentChip,
   CommentAttachmentTile,
@@ -984,6 +985,13 @@ function SharedDropView({
                     {viewAsClient ? 'Team view' : 'View as client'}
                   </span>
                 </button>
+              )}
+              {data.isEditor && (
+                <AdminSendShareButton
+                  surface="calendar"
+                  previewUrl={`/api/calendar/share/${token}/send`}
+                  sendUrl={`/api/calendar/share/${token}/send`}
+                />
               )}
               {total > 0 && (
                 <ShareTourLaunchButton storageKey={CALENDAR_TOUR_STORAGE_KEY} />
