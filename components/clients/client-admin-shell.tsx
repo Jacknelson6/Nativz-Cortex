@@ -10,6 +10,7 @@ import {
   Coins,
   FileUser,
   Handshake,
+  Sparkles,
 } from 'lucide-react';
 import {
   ClientAdminShellProvider,
@@ -37,6 +38,12 @@ type NavItem = {
 // Onboarding lives under a top-level /admin/onboarding admin tool (not
 // per-client), so it's not in this nav.
 const NAV: NavItem[] = [
+  {
+    key: 'profile',
+    label: 'Profile (preview)',
+    path: '/profile',
+    icon: Sparkles,
+  },
   {
     key: 'info',
     label: 'Info',
