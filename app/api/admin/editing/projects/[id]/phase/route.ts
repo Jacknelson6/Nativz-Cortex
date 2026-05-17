@@ -57,7 +57,7 @@ export async function POST(
     .from('editing_projects')
     .select(
       `id, name, phase, client_id,
-       client:clients!editing_projects_client_id_fkey(name, google_chat_webhook_url)`,
+       client:clients!editing_projects_client_id_fkey(name, chat_webhook_url)`,
     )
     .eq('id', id)
     .maybeSingle();
@@ -119,7 +119,7 @@ export async function POST(
   const cleanOrigin = origin ? new URL(origin).origin : null;
 
   const client = row.client as
-    | { name?: string | null; google_chat_webhook_url?: string | null }
+    | { name?: string | null; chat_webhook_url?: string | null }
     | null;
 
   await notifyPhaseChange(admin, {
@@ -127,7 +127,7 @@ export async function POST(
     projectName: (row.name as string) ?? 'Untitled project',
     clientId: row.client_id as string,
     clientName: client?.name ?? null,
-    clientWebhookUrl: client?.google_chat_webhook_url ?? null,
+    clientWebhookUrl: client?.chat_webhook_url ?? null,
     fromPhase,
     toPhase,
     actorId: user.id,
