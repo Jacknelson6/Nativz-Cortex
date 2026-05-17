@@ -7,6 +7,7 @@ import {
   WorkspaceSection,
   WorkspaceRow,
 } from '@/components/clients/profile/workspace-section';
+import { BasicsEditor } from '@/components/clients/profile/identity-editors';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,12 +21,16 @@ type ClientRow = {
   logo_url: string | null;
   lifecycle_state: string | null;
   description: string | null;
-  brand_voice: string | null;
-  target_audience: string | null;
-  caption_cta: string | null;
-  caption_hashtags: string[] | null;
-  default_strategist_id: string | null;
-  default_editor_id: string | null;
+  services: string[] | null;
+};
+
+type ContactRow = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  role: string | null;
+  project_role: string | null;
+  is_primary: boolean | null;
 };
 
 const LIFECYCLE_LABEL: Record<string, string> = {
@@ -35,18 +40,6 @@ const LIFECYCLE_LABEL: Record<string, string> = {
   active: 'Active',
   churned: 'Churned',
 };
-
-function preview(value: string | null, max = 140): string | null {
-  if (!value) return null;
-  const trimmed = value.trim();
-  if (trimmed.length <= max) return trimmed;
-  return `${trimmed.slice(0, max).trimEnd()}…`;
-}
-
-function cleanUrl(url: string | null | undefined): string | null {
-  if (!url) return null;
-  return url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '');
-}
 
 export default async function ProfileOverviewPage({
   params,
@@ -61,55 +54,26 @@ export default async function ProfileOverviewPage({
     .select(
       [
         'id', 'name', 'slug', 'industry', 'website_url', 'agency', 'logo_url',
-        'lifecycle_state', 'description', 'brand_voice', 'target_audience',
-        'caption_cta', 'caption_hashtags',
-        'default_strategist_id', 'default_editor_id',
+        'lifecycle_state', 'description', 'services',
       ].join(','),
     )
     .eq('slug', slug)
     .single<ClientRow>();
   if (!client) notFound();
 
-  const assigneeIds = [client.default_strategist_id, client.default_editor_id]
-    .filter((id): id is string => !!id);
-
-  const [
-    teamRes,
-    contactsRes,
-    invitesRes,
-    assetsRes,
-    onboardingsRes,
-  ] = await Promise.all([
-    assigneeIds.length > 0
-      ? admin.from('team_members').select('id, full_name, email').in('id', assigneeIds)
-      : Promise.resolve({ data: [] as { id: string; full_name: string | null; email: string }[] }),
-    admin.from('contacts').select('id', { count: 'exact', head: true }).eq('client_id', client.id),
-    admin.from('invite_tokens').select('id', { count: 'exact', head: true }).eq('client_id', client.id),
-    admin.from('client_brand_assets').select('id', { count: 'exact', head: true }).eq('client_id', client.id),
-    admin.from('onboardings').select('id', { count: 'exact', head: true }).eq('client_id', client.id),
-  ]);
-
-  const teamMap = new Map<string, { name: string }>();
-  for (const m of (teamRes.data ?? [])) {
-    teamMap.set(m.id, { name: m.full_name?.trim() || m.email });
-  }
-  const strategist = client.default_strategist_id
-    ? teamMap.get(client.default_strategist_id)?.name ?? null
-    : null;
-  const editor = client.default_editor_id
-    ? teamMap.get(client.default_editor_id)?.name ?? null
-    : null;
-
-  const contactsCount = contactsRes.count ?? 0;
-  const invitesCount = invitesRes.count ?? 0;
-  const assetsCount = assetsRes.count ?? 0;
-  const onboardingsCount = onboardingsRes.count ?? 0;
+  const { data: contactsData } = await admin
+    .from('contacts')
+    .select('id, name, email, role, project_role, is_primary')
+    .eq('client_id', client.id)
+    .order('is_primary', { ascending: false })
+    .order('name');
+  const contacts: ContactRow[] = contactsData ?? [];
 
   const lifecycleLabel = client.lifecycle_state
     ? LIFECYCLE_LABEL[client.lifecycle_state] ?? client.lifecycle_state
     : null;
 
-  const hashtagCount = (client.caption_hashtags ?? []).filter((h) => h.trim().length > 0).length;
+  const services = (client.services ?? []).filter(Boolean);
 
   return (
     <>
@@ -117,16 +81,23 @@ export default async function ProfileOverviewPage({
         eyebrow="Brand profile"
         icon={Eye}
         title="Overview"
-        subtitle="A single read of who they are, what we ship, and who's on the account. Jump to a section in the rail to edit."
+        subtitle="The at-a-glance read on this brand. Edit any of it from the rail on the left."
+      />
+
+      <BasicsEditor
+        clientId={client.id}
+        initial={{
+          name: client.name ?? '',
+          website_url: client.website_url ?? '',
+          industry: client.industry ?? '',
+          description: client.description ?? '',
+        }}
       />
 
       <WorkspaceSection
-        title="Identity"
-        description="The bare facts a new strategist needs to load this brand in their head."
+        title="Context"
+        description="Read-only properties. Manage from Deliverables + Identity."
       >
-        <WorkspaceRow label="Brand name" value={client.name} />
-        <WorkspaceRow label="Website" value={cleanUrl(client.website_url)} />
-        <WorkspaceRow label="Industry" value={client.industry} />
         <WorkspaceRow label="Lifecycle" value={lifecycleLabel} />
         <WorkspaceRow label="Agency" value={client.agency} />
         <WorkspaceRow
@@ -139,68 +110,58 @@ export default async function ProfileOverviewPage({
             />
           }
         />
-        <WorkspaceRow
-          label="Description"
-          value={preview(client.description, 220)}
-          multiline
-        />
       </WorkspaceSection>
 
       <WorkspaceSection
-        title="Voice & captions"
-        description="The guardrails the AI uses when drafting topic plans, scripts and captions."
+        title="Points of contact"
+        description="Who on the client side we talk to. Manage the roster from Users."
       >
-        <WorkspaceRow
-          label="Brand voice"
-          value={preview(client.brand_voice, 180)}
-          multiline
-        />
-        <WorkspaceRow
-          label="Target audience"
-          value={preview(client.target_audience, 180)}
-          multiline
-        />
-        <WorkspaceRow label="Caption CTA" value={preview(client.caption_cta, 140)} />
-        <WorkspaceRow
-          label="Hashtags"
-          value={hashtagCount > 0 ? `${hashtagCount} saved` : null}
-        />
+        {contacts.length === 0 ? (
+          <div className="px-5 py-6 text-sm italic text-text-muted">
+            No contacts saved yet.
+          </div>
+        ) : (
+          contacts.map((c) => (
+            <WorkspaceRow
+              key={c.id}
+              label={
+                <span className="flex items-center gap-2">
+                  {c.name?.trim() || c.email || 'Unnamed'}
+                  {c.is_primary && (
+                    <span className="rounded-full bg-accent-surface px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-accent-text">
+                      Primary
+                    </span>
+                  )}
+                </span>
+              }
+              hint={[c.project_role, c.role].filter(Boolean).join(' · ') || undefined}
+              value={c.email}
+            />
+          ))
+        )}
       </WorkspaceSection>
 
       <WorkspaceSection
-        title="People"
-        description="Who runs this client on our side, plus everyone with portal access."
+        title="Services enabled"
+        description="What we deliver for this brand each month."
       >
-        <WorkspaceRow label="Strategist" value={strategist} />
-        <WorkspaceRow label="Editor" value={editor} />
-        <WorkspaceRow
-          label="Users"
-          hint="Contacts + portal access"
-          value={
-            contactsCount > 0 || invitesCount > 0
-              ? `${contactsCount} contact${contactsCount === 1 ? '' : 's'} · ${invitesCount} invite${invitesCount === 1 ? '' : 's'}`
-              : null
-          }
-        />
-      </WorkspaceSection>
-
-      <WorkspaceSection
-        title="Operations"
-        description="Files, history, and the running tally of work in flight."
-      >
-        <WorkspaceRow
-          label="Brand assets"
-          value={assetsCount > 0 ? `${assetsCount} file${assetsCount === 1 ? '' : 's'}` : null}
-        />
-        <WorkspaceRow
-          label="Onboardings"
-          value={
-            onboardingsCount > 0
-              ? `${onboardingsCount} run${onboardingsCount === 1 ? '' : 's'}`
-              : null
-          }
-          empty="None started"
-        />
+        <div className="px-5 py-5">
+          {services.length === 0 ? (
+            <span className="text-sm italic text-text-muted">No services enabled.</span>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {services.map((s) => (
+                <span
+                  key={s}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-accent-surface px-3 py-1 text-xs font-medium text-accent-text ring-1 ring-inset ring-accent/15"
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+                  {s}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
       </WorkspaceSection>
     </>
   );

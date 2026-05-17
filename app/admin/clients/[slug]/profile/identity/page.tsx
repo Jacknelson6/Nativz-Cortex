@@ -3,7 +3,6 @@ import { IdCard } from 'lucide-react';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { SettingsPageHeader } from '@/components/clients/settings/settings-primitives';
 import {
-  BasicsEditor,
   VoiceEditor,
   CaptionsEditor,
   ProductsEditor,
@@ -14,12 +13,6 @@ export const dynamic = 'force-dynamic';
 
 type ClientRow = {
   id: string;
-  name: string | null;
-  slug: string | null;
-  industry: string | null;
-  website_url: string | null;
-  logo_url: string | null;
-  description: string | null;
   brand_voice: string | null;
   target_audience: string | null;
   writing_style: string | null;
@@ -45,8 +38,7 @@ export default async function ProfileIdentityPage({
     .from('clients')
     .select(
       [
-        'id', 'name', 'slug', 'industry', 'website_url', 'logo_url',
-        'description', 'brand_voice', 'target_audience', 'writing_style',
+        'id', 'brand_voice', 'target_audience', 'writing_style',
         'banned_phrases', 'caption_cta', 'caption_hashtags',
         'caption_notes', 'hashtag_notes', 'cta_notes',
         'products', 'brand_aliases',
@@ -62,17 +54,7 @@ export default async function ProfileIdentityPage({
         eyebrow="Brand profile"
         icon={IdCard}
         title="Identity"
-        subtitle="The brand's name, voice, products, and the captions we paste under every post."
-      />
-
-      <BasicsEditor
-        clientId={client.id}
-        initial={{
-          name: client.name ?? '',
-          website_url: client.website_url ?? '',
-          industry: client.industry ?? '',
-          description: client.description ?? '',
-        }}
+        subtitle="Voice, captions, products, and the aliases the AI needs to draft as this brand. Edit basics from Overview."
       />
 
       <VoiceEditor
