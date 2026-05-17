@@ -16,6 +16,11 @@ interface DialogProps {
   bodyClassName?: string;
   /** Fires when user attempts to ESC. Call `e.preventDefault()` to keep open. */
   onCancel?: (e: React.SyntheticEvent<HTMLDialogElement>) => void;
+  /**
+   * `center` (default) — classic centered modal.
+   * `right` — slide-over panel docked to the right edge, full viewport height.
+   */
+  placement?: 'center' | 'right';
 }
 
 const maxWidthStyles = {
@@ -30,6 +35,18 @@ const maxWidthStyles = {
   full: 'max-w-[calc(100vw-4rem)] max-h-[calc(100vh-4rem)]',
 };
 
+const rightPlacementWidth: Record<NonNullable<DialogProps['maxWidth']>, string> = {
+  sm: 'w-full sm:w-[24rem]',
+  md: 'w-full sm:w-[28rem]',
+  lg: 'w-full sm:w-[32rem]',
+  xl: 'w-full sm:w-[36rem]',
+  '2xl': 'w-full sm:w-[42rem]',
+  '5xl': 'w-full sm:w-[56rem]',
+  '6xl': 'w-full sm:w-[64rem]',
+  '7xl': 'w-full sm:w-[72rem]',
+  full: 'w-full',
+};
+
 export function Dialog({
   open,
   onClose,
@@ -39,6 +56,7 @@ export function Dialog({
   className = '',
   bodyClassName,
   onCancel,
+  placement = 'center',
 }: DialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
@@ -59,13 +77,18 @@ export function Dialog({
     if (e.target === dialogRef.current) onClose();
   }
 
+  const placementClasses =
+    placement === 'right'
+      ? `${rightPlacementWidth[maxWidth]} ml-auto mr-0 my-0 h-screen max-h-screen rounded-none rounded-l-xl border-l border-y-0 border-r-0 border-nativz-border`
+      : `${maxWidthStyles[maxWidth]} w-full m-auto rounded-xl border border-nativz-border`;
+
   return (
     <dialog
       ref={dialogRef}
       onClose={onClose}
       onCancel={onCancel}
       onClick={handleBackdropClick}
-      className={`${maxWidthStyles[maxWidth]} w-full m-auto rounded-xl border border-nativz-border bg-surface p-0 shadow-elevated backdrop:bg-[color:var(--nz-ink)]/70 backdrop:backdrop-blur-sm relative ${className}`.trim()}
+      className={`${placementClasses} bg-surface p-0 shadow-elevated backdrop:bg-[color:var(--nz-ink)]/70 backdrop:backdrop-blur-sm relative ${className}`.trim()}
     >
       <div className={bodyClassName ?? 'p-6'}>
         {title ? (

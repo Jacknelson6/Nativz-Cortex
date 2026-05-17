@@ -9,7 +9,6 @@ import {
   BarChart3,
   ChevronRight,
   Contact,
-  ImagePlus,
   StickyNote,
   TrendingUp,
   MessagesSquare,
@@ -17,7 +16,6 @@ import {
   Settings as SettingsIcon,
   Users,
   BookUser,
-  ShoppingBag,
   Calendar,
   CalendarDays,
   ClipboardCheck,
@@ -26,7 +24,6 @@ import {
   Telescope,
   Workflow,
   Sparkles,
-  HeartPulse,
 } from 'lucide-react';
 import { BrandSwitcher } from '@/components/portal/brand-switcher';
 import { useBrandMode } from '@/components/layout/brand-mode-provider';
@@ -162,16 +159,12 @@ const NAV_SECTIONS: NavSection[] = [
           // single-brand views; this surface is agency-wide. (Notification
           // config absorbed into Settings on 2026-05-03.)
           { href: '/admin/content-tools', label: 'Content Tools', icon: ClipboardCheck },
-          // Ad Generator lives in Admin (not Brand tools) because every run
-          // burns Gemini 2.5 Flash Image credits — keep it behind the
-          // operator menu rather than next to free brand-research surfaces.
-          { href: '/ads', label: 'Ad Generator', icon: ImagePlus },
-          // Onboarding = unified onboarding tracker (SMM + editing). The
-          // legacy "/admin/sales" pipeline was retired with the proposal
-          // strip; the new flow lives at /admin/onboarding.
+          // Ad Generator + Publish Health stripped from the rail
+          // 2026-05-17: both surfaces were broken / abandoned. Direct URLs
+          // still resolve to a 410-style "removed" notice via middleware.
+          // Onboarding = unified onboarding tracker (SMM + editing).
           { href: '/admin/onboarding', label: 'Onboarding', icon: Workflow },
           { href: '/admin/users', label: 'Users', icon: Users },
-          { href: '/admin/ops/publish-health', label: 'Publish Health', icon: HeartPulse },
           { href: '/admin/accounting', label: 'Accounting', icon: Receipt, superAdminOnly: true },
           { href: '/admin/usage', label: 'Usage', icon: Gauge },
           { href: '/admin/settings', label: 'Settings', icon: SettingsIcon },

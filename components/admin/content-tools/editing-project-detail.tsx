@@ -34,6 +34,7 @@ import {
   EDITING_STATUS_LABEL,
   EDITING_TYPE_LABEL,
   type EditingProject,
+  type EditingProjectPhase,
   type EditingProjectStatus,
   type EditingProjectType,
   type EditingProjectVideo,
@@ -56,6 +57,9 @@ import {
   ContentKindBadge,
   UnifiedStatusPill,
 } from './detail-dialog/unified-status-pill';
+import { PhaseStrip } from './detail-dialog/phase-strip';
+import { PhasePill } from './detail-dialog/phase-pill';
+import type { PhaseRole } from '@/lib/content-projects/phase-state-machine';
 import { unifiedStatusForEditingProject } from '@/lib/content-tools/unified-status';
 import { nounForProjectType } from '@/lib/editing/project-noun';
 import {
@@ -173,6 +177,12 @@ export function EditingProjectDetail({
   const [driveUrl, setDriveUrl] = useState('');
   const [type, setType] = useState<EditingProjectType>('editing');
   const [status, setStatus] = useState<EditingProjectStatus>('editing');
+  const [phase, setPhase] = useState<EditingProjectPhase>('Planning');
+  const [phaseRole, setPhaseRole] = useState<PhaseRole>(() => {
+    if (typeof window === 'undefined') return 'pm';
+    const stored = window.localStorage.getItem('cortex.content-tools.phase-role');
+    return stored === 'videographer' || stored === 'editor' ? stored : 'pm';
+  });
   const [dragActive, setDragActive] = useState(false);
   const [tab, setTab] = useState<DetailTab>('details');
 
@@ -271,6 +281,7 @@ export function EditingProjectDetail({
       setDriveUrl(body.project.drive_folder_url ?? '');
       setType(body.project.project_type);
       setStatus(body.project.status);
+      setPhase(body.project.phase ?? 'Planning');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to load project');
     } finally {
@@ -320,6 +331,7 @@ export function EditingProjectDetail({
         setDriveUrl(project.drive_folder_url ?? '');
         setType(project.project_type);
         setStatus(project.status);
+        setPhase(project.phase ?? 'Planning');
       }
       void load();
       void loadShareLinks();
@@ -869,6 +881,7 @@ export function EditingProjectDetail({
           <>
             {saving && <Loader2 size={14} className="animate-spin text-text-muted" />}
             <ContentKindBadge kind="editing" />
+            <PhasePill phase={phase} />
             <UnifiedStatusPill status={unifiedStatusForEditingProject(status)} />
           </>
         }
@@ -940,6 +953,55 @@ export function EditingProjectDetail({
         }
         footer={footer}
       >
+
+        {/* Phase strip. Top of the body so the current state + next action
+            is the first thing a role-switched viewer sees. PhaseStrip
+            renders the 9-state track + the role-filtered CTA buttons; the
+            role lens selector itself lives in this section so it persists
+            across phase changes. */}
+        <Section
+          label="Phase"
+          extra={
+            <div className="flex items-center gap-1 rounded-full border border-nativz-border bg-surface p-0.5 text-[11px]">
+              {(['pm', 'videographer', 'editor'] as PhaseRole[]).map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => {
+                    setPhaseRole(r);
+                    if (typeof window !== 'undefined') {
+                      window.localStorage.setItem('cortex.content-tools.phase-role', r);
+                    }
+                  }}
+                  className={`cursor-pointer rounded-full px-2 py-0.5 transition-colors ${
+                    phaseRole === r
+                      ? 'bg-accent text-accent-contrast'
+                      : 'text-text-muted hover:text-text-secondary'
+                  }`}
+                >
+                  {r === 'pm' ? 'PM' : r === 'videographer' ? 'Videographer' : 'Editor'}
+                </button>
+              ))}
+            </div>
+          }
+        >
+          <PhaseStrip
+            projectId={project.id}
+            phase={phase}
+            role={phaseRole}
+            preconditions={{
+              drive_folder_url: !!driveUrl.trim(),
+              editing_videos: (data?.videos.length ?? 0) > 0,
+              share_link: !!activeLink,
+              scheduled_posts: (data?.scheduled_posts?.length ?? 0) > 0,
+            }}
+            onChanged={(next) => {
+              setPhase(next);
+              void load();
+              onChanged();
+            }}
+          />
+        </Section>
 
         {/* Scheduled dates. Surfaces once the project has been promoted to
             the content calendar — lists the per-post drop dates so Jack can

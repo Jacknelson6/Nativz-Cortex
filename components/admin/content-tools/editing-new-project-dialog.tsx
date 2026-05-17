@@ -21,6 +21,10 @@ import {
   type CalendarUploadFile,
   type CalendarUploadProgress,
 } from '@/lib/calendar/upload-store';
+import {
+  currentMonth,
+  monthPickerOptions,
+} from '@/lib/content-projects/month-utils';
 
 /**
  * Unified "Upload content" entry point. The same dialog mints either an
@@ -98,6 +102,13 @@ export function EditingNewProjectDialog({
   // so the editing branch hardcodes 'editing' on submit.
   const [name, setName] = useState('');
   const [notes, setNotes] = useState('');
+  // content_month is set explicitly at creation and is immutable
+  // thereafter. Default to today's month so the happy path is a single
+  // click; admins can pick prior or future months to backfill or
+  // pre-stage a calendar for the following month.
+  const [contentMonth, setContentMonth] = useState<string | null>(() =>
+    currentMonth(),
+  );
 
   // Calendar fields
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
@@ -139,6 +150,7 @@ export function EditingNewProjectDialog({
     setClientId('');
     setName('');
     setNotes('');
+    setContentMonth(currentMonth());
     setFiles([]);
     setProgress(new Map());
     setStartDate(today);
@@ -159,6 +171,7 @@ export function EditingNewProjectDialog({
             name: name.trim(),
             project_type: 'editing',
             notes: notes.trim() || undefined,
+            content_month: contentMonth ?? undefined,
           }),
         });
         if (!res.ok) {
@@ -298,6 +311,8 @@ export function EditingNewProjectDialog({
             setName={setName}
             notes={notes}
             setNotes={setNotes}
+            contentMonth={contentMonth}
+            setContentMonth={setContentMonth}
           />
         ) : (
           <CalendarFields
@@ -385,12 +400,17 @@ function EditingFields({
   setName,
   notes,
   setNotes,
+  contentMonth,
+  setContentMonth,
 }: {
   name: string;
   setName: (v: string) => void;
   notes: string;
   setNotes: (v: string) => void;
+  contentMonth: string | null;
+  setContentMonth: (v: string | null) => void;
 }) {
+  const monthOptions = useMemo(() => monthPickerOptions(), []);
   return (
     <>
       <Field label="Project name">
@@ -400,6 +420,24 @@ function EditingFields({
           placeholder="Q2 Reel batch 3"
           className="block w-full rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent focus:shadow-[0_0_0_3px_var(--focus-ring)]"
         />
+      </Field>
+
+      <Field label="Content month">
+        <select
+          value={contentMonth ?? ''}
+          onChange={(e) => setContentMonth(e.target.value || null)}
+          className="block w-full rounded-lg border border-nativz-border bg-surface px-3 py-2 text-sm text-text-primary transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent focus:shadow-[0_0_0_3px_var(--focus-ring)]"
+        >
+          {monthOptions.map((opt) => (
+            <option key={opt.value ?? 'unscheduled'} value={opt.value ?? ''}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+        <p className="mt-1 text-[11px] text-text-muted">
+          Drives the month grouping on the projects list. Picks today&apos;s
+          month by default; choose another to backfill or pre-stage.
+        </p>
       </Field>
 
       <Field label="Notes">

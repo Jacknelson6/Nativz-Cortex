@@ -11,16 +11,22 @@
 
 export function Section({
   label,
+  extra,
   children,
 }: {
   label: string;
+  /** Optional right-rail content beside the label (e.g. role selector). */
+  extra?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <div className="space-y-2">
-      <p className="text-xs font-medium uppercase tracking-wide text-text-muted">
-        {label}
-      </p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-medium uppercase tracking-wide text-text-muted">
+          {label}
+        </p>
+        {extra ? <div className="shrink-0">{extra}</div> : null}
+      </div>
       {children}
     </div>
   );
