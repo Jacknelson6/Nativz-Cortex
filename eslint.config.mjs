@@ -37,6 +37,9 @@ const eslintConfig = defineConfig([
     ".claude/**",
     // Git submodule — lint the app repo only
     "ac-knowledge-graph/**",
+    // One-off CLI utilities (docs/commands.md long-tail). Not shipped to users;
+    // baseline has ~197 pre-existing warnings/errors. Lint ad-hoc if needed.
+    "scripts/**",
   ]),
 ]);
 
