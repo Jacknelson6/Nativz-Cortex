@@ -140,7 +140,7 @@ Anderson mode softens these to lighter navy-tinted shadows.
 
 ## Breakpoints
 
-Tailwind defaults — no custom breakpoints.
+Tailwind defaults, no custom breakpoints.
 
 | Class | Min width |
 |---|---|
@@ -182,7 +182,7 @@ De facto scale (measured from actual usage across `app/` + `components/`):
 
 ## Pointers
 
-- [`docs/design-tokens.md`](docs/design-tokens.md) — canonical token reference with every brand mode override and carve-out.
-- [`docs/detail-design-patterns.md`](docs/detail-design-patterns.md) — micro-interaction patterns (motion, focus, hover).
-- [`components/ui/COMPONENTS.md`](components/ui/COMPONENTS.md) — primitive catalog. Use a primitive instead of styling raw HTML.
-- [`app/globals.css`](app/globals.css) — the actual definitions. If a token is missing here, this doc is wrong; fix the doc, not by inventing a new token.
+- [`docs/design-tokens.md`](docs/design-tokens.md), canonical token reference with every brand mode override and carve-out.
+- [`docs/detail-design-patterns.md`](docs/detail-design-patterns.md), micro-interaction patterns (motion, focus, hover).
+- [`components/ui/COMPONENTS.md`](components/ui/COMPONENTS.md), primitive catalog. Use a primitive instead of styling raw HTML.
+- [`app/globals.css`](app/globals.css), the actual definitions. If a token is missing here, this doc is wrong; fix the doc, not by inventing a new token.

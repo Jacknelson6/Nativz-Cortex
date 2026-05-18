@@ -8,7 +8,7 @@ For tokens (colors, spacing, radii) used by these primitives, see `/DESIGN_SYSTE
 
 ## Inputs
 
-### Button — `button.tsx`
+### Button, `button.tsx`
 Canonical button. Use this 99% of the time.
 
 | Prop | Type | Default | Required |
@@ -28,7 +28,7 @@ Plus all `<button>` HTML attrs (onClick, disabled, type, etc.).
 **Don't use when:** marketing hero CTA (→ `GlowButton`), frosted-glass landing aesthetic (→ `GlassButton`).
 **Use instead of:** native `<button>`, custom Tailwind button styling.
 
-### GlassButton — `glass-button.tsx`
+### GlassButton, `glass-button.tsx`
 Frosted-glass aesthetic with backdrop blur. Marketing surfaces only.
 
 | Prop | Type | Default | Required |
@@ -45,7 +45,7 @@ Plus all `<button>` HTML attrs.
 **Use this when:** marketing landing pages, share/present surfaces over imagery.
 **Don't use when:** admin or portal UI (→ `Button`), hero CTA (→ `GlowButton`).
 
-### GlowButton — `glow-button.tsx`
+### GlowButton, `glow-button.tsx`
 Animated glow ring. Hero CTA only.
 
 | Prop | Type | Default | Required |
@@ -62,7 +62,7 @@ Plus all `<button>` HTML attrs.
 **Use this when:** primary hero CTA on landing / pricing / present surfaces. One per page max.
 **Don't use when:** anywhere in product UI (→ `Button`), secondary marketing CTA (→ `GlassButton`).
 
-### Input — `input.tsx`
+### Input, `input.tsx`
 Canonical text input. Also exports `Textarea`.
 
 | Prop | Type | Default | Required |
@@ -78,14 +78,14 @@ Plus all `<input>` HTML attrs (value, onChange, type, placeholder, etc.).
 
 **Use instead of:** raw `<input>` with manual label/error markup.
 
-### Textarea — `input.tsx`
+### Textarea, `input.tsx`
 Same shape as `Input` but renders `<textarea>`. Same `label` + `error` props.
 
 ```tsx
 <Textarea label="Bio" rows={4} value={bio} onChange={(e) => setBio(e.target.value)} />
 ```
 
-### Checkbox — `checkbox.tsx`
+### Checkbox, `checkbox.tsx`
 Radix Checkbox. Supports indeterminate state.
 
 | Prop | Type | Default | Required |
@@ -101,7 +101,7 @@ Plus all Radix `CheckboxPrimitive.Root` props.
 
 **Use instead of:** raw `<input type="checkbox">`.
 
-### Select — `select.tsx`
+### Select, `select.tsx`
 Native `<select>` with custom icon + error display.
 
 | Prop | Type | Default | Required |
@@ -119,7 +119,7 @@ Plus all `<select>` HTML attrs.
 **Use this when:** short, fixed option list, no search needed.
 **Don't use when:** options need filtering (→ `ComboSelect`).
 
-### ComboSelect — `combo-select.tsx`
+### ComboSelect, `combo-select.tsx`
 Searchable dropdown with custom render.
 
 | Prop | Type | Default | Required |
@@ -140,7 +140,7 @@ Searchable dropdown with custom render.
 **Use this when:** option list is long enough to need search.
 **Use instead of:** raw `<select>` with manual search.
 
-### Toggle — `toggle.tsx`
+### Toggle, `toggle.tsx`
 Switch with label + description.
 
 | Prop | Type | Default | Required |
@@ -157,7 +157,7 @@ Switch with label + description.
 
 **Use instead of:** raw checkbox + label markup for boolean preferences.
 
-### TagInput — `tag-input.tsx`
+### TagInput, `tag-input.tsx`
 Pill-shaped tag entry. Enter/comma to add, Backspace to remove last.
 
 | Prop | Type | Default | Required |
@@ -174,7 +174,7 @@ Pill-shaped tag entry. Enter/comma to add, Backspace to remove last.
 <TagInput label="Keywords" value={tags} onChange={setTags} maxTags={10} />
 ```
 
-### DateTimePicker — `date-time-picker.tsx`
+### DateTimePicker, `date-time-picker.tsx`
 Combined date + time picker. Date is `YYYY-MM-DD`, time is `HH:MM` 24h.
 
 | Prop | Type | Default | Required |
@@ -190,7 +190,7 @@ Combined date + time picker. Date is `YYYY-MM-DD`, time is `HH:MM` 24h.
 
 **Notes:** disables past dates. Displays in 12h, stores 24h.
 
-### TimePicker15 — `time-picker-15.tsx`
+### TimePicker15, `time-picker-15.tsx`
 15-minute interval time picker.
 
 | Prop | Type | Default | Required |
@@ -205,7 +205,7 @@ Combined date + time picker. Date is `YYYY-MM-DD`, time is `HH:MM` 24h.
 <TimePicker15 value={"09:15"} onChange={setTime} />
 ```
 
-### ScheduleRangePicker — `schedule-range-picker.tsx`
+### ScheduleRangePicker, `schedule-range-picker.tsx`
 Forward-looking date range picker with preset sidebar.
 
 | Prop | Type | Default | Required |
@@ -220,7 +220,7 @@ Forward-looking date range picker with preset sidebar.
 
 **Notes:** disables past dates.
 
-### ImageUpload — `image-upload.tsx`
+### ImageUpload, `image-upload.tsx`
 Drop zone + preview. Accepts JPEG, PNG, WebP, SVG. Max 2MB.
 
 | Prop | Type | Default | Required |
@@ -234,7 +234,7 @@ Drop zone + preview. Accepts JPEG, PNG, WebP, SVG. Max 2MB.
 <ImageUpload label="Logo" value={logo} onChange={setLogo} />
 ```
 
-### AvatarEditor — `avatar-editor.tsx`
+### AvatarEditor, `avatar-editor.tsx`
 Canvas-based avatar crop + zoom.
 
 | Prop | Type | Default | Required |
@@ -247,7 +247,7 @@ Canvas-based avatar crop + zoom.
 <AvatarEditor value={avatar} onChange={setAvatar} />
 ```
 
-### ClientPickerButton — `client-picker.tsx`
+### ClientPickerButton, `client-picker.tsx`
 Client/org selector with bento-grid modal.
 
 | Prop | Type | Default | Required |
@@ -262,7 +262,7 @@ Client/org selector with bento-grid modal.
 <ClientPickerButton clients={clients} value={clientId} onChange={setClientId} />
 ```
 
-### ClientPortfolioSelector — `client-portfolio-selector.tsx`
+### ClientPortfolioSelector, `client-portfolio-selector.tsx`
 Multi-client portfolio grid with status dots (connected/disconnected/paused).
 
 | Prop | Type | Default | Required |
@@ -280,7 +280,7 @@ Multi-client portfolio grid with status dots (connected/disconnected/paused).
 
 ## Layout
 
-### Card — `card.tsx`
+### Card, `card.tsx`
 Surface container. Exports `Card`, `CardHeader`, `CardTitle`, `CardDescription`, `CardAction`, `CardContent`, `CardFooter` for composition.
 
 | Prop | Type | Default | Required |
@@ -300,7 +300,7 @@ Plus all `<div>` HTML attrs.
 
 **Use instead of:** ad-hoc `<div className="bg-surface rounded-md p-4">…</div>`.
 
-### IconCard — `icon-card.tsx`
+### IconCard, `icon-card.tsx`
 Section card with leading icon swatch + optional help tooltip.
 
 | Prop | Type | Default | Required |
@@ -319,7 +319,7 @@ Section card with leading icon swatch + optional help tooltip.
 <IconCard icon={<Zap />} title="Quick actions" tone="accent">{children}</IconCard>
 ```
 
-### SpotlightCard — `spotlight-card.tsx`
+### SpotlightCard, `spotlight-card.tsx`
 Card with radial gradient that follows mouse on hover. Marketing.
 
 | Prop | Type | Default | Required |
@@ -334,7 +334,7 @@ Card with radial gradient that follows mouse on hover. Marketing.
 
 **Don't use in:** admin or portal UI (→ `Card`).
 
-### SubNav — `sub-nav.tsx`
+### SubNav, `sub-nav.tsx`
 Secondary tab nav. Also exports `SubNavLinks` (router.push variant with localStorage memory).
 
 | Prop | Type | Default | Required |
@@ -350,7 +350,7 @@ Secondary tab nav. Also exports `SubNavLinks` (router.push variant with localSto
 
 **Use instead of:** ad-hoc tab buttons.
 
-### Stepper — `stepper.tsx`
+### Stepper, `stepper.tsx`
 Numbered horizontal stepper with animated connectors.
 
 | Prop | Type | Default | Required |
@@ -364,7 +364,7 @@ Numbered horizontal stepper with animated connectors.
 <Stepper steps={steps} currentStep="connect" completedSteps={["choose"]} />
 ```
 
-### FloatingDock — `floating-dock.tsx`
+### FloatingDock, `floating-dock.tsx`
 Sticky bottom action dock. Collapsed mode shows tooltips on hover.
 
 | Prop | Type | Default | Required |
@@ -377,7 +377,7 @@ Sticky bottom action dock. Collapsed mode shows tooltips on hover.
 <FloatingDock items={actions} />
 ```
 
-### PageShellSkeleton — `page-shell-skeleton.tsx`
+### PageShellSkeleton, `page-shell-skeleton.tsx`
 Full-page skeleton. Also exports `SettingsShellSkeleton`, `ProcessingShellSkeleton`.
 
 | Prop | Type | Default | Required |
@@ -398,7 +398,7 @@ export default function Loading() { return <PageShellSkeleton tiles={4} />; }
 
 ## Feedback
 
-### Badge — `badge.tsx`
+### Badge, `badge.tsx`
 Inline status pill.
 
 | Prop | Type | Default | Required |
@@ -414,7 +414,7 @@ Plus all `<span>` HTML attrs.
 
 **Use instead of:** custom colored pill divs.
 
-### Skeleton — `skeleton.tsx`
+### Skeleton, `skeleton.tsx`
 Single shimmer block on `--surface-elevated`. Also exports `SkeletonGroup`, `CardSkeleton`, `TableSkeleton`, `DashboardSkeleton`.
 
 | Prop | Type | Default | Required |
@@ -429,7 +429,7 @@ Plus all `<div>` HTML attrs.
 
 **Use instead of:** ad-hoc `<div className="animate-pulse bg-surface" />` blocks.
 
-### LoadingSkeletons — `loading-skeletons.tsx`
+### LoadingSkeletons, `loading-skeletons.tsx`
 Higher-level skeleton patterns. Exports `SkeletonRows`, `SkeletonCards`, `SkeletonTable`, `InlineSpinner`.
 
 `SkeletonRows`:
@@ -446,7 +446,7 @@ Higher-level skeleton patterns. Exports `SkeletonRows`, `SkeletonCards`, `Skelet
 
 **Use this when:** you need a multi-row skeleton, not just one block.
 
-### ScrollProgress — `scroll-progress.tsx`
+### ScrollProgress, `scroll-progress.tsx`
 Thin accent bar pinned to viewport top, scales with scroll.
 
 | Prop | Type | Default | Required |
@@ -457,14 +457,14 @@ Thin accent bar pinned to viewport top, scales with scroll.
 <ScrollProgress />
 ```
 
-### ScrollToTop — `scroll-to-top.tsx`
+### ScrollToTop, `scroll-to-top.tsx`
 Fixed bottom-right FAB. Appears after 400px scroll. No props.
 
 ```tsx
 <ScrollToTop />
 ```
 
-### EncryptedText — `encrypted-text.tsx`
+### EncryptedText, `encrypted-text.tsx`
 Char-scramble reveal animation. Marketing flourishes.
 
 | Prop | Type | Default | Required |
@@ -478,7 +478,7 @@ Char-scramble reveal animation. Marketing flourishes.
 <EncryptedText text="Decoded." />
 ```
 
-### TextFlip — `text-flip.tsx`
+### TextFlip, `text-flip.tsx`
 Cycles through words with vertical translateY flip animation.
 
 | Prop | Type | Default | Required |
@@ -495,7 +495,7 @@ Cycles through words with vertical translateY flip animation.
 
 ## Overlays
 
-### Dialog — `dialog.tsx`
+### Dialog, `dialog.tsx`
 Canonical modal shell, built on native `<dialog>` with `showModal()` for top-layer stacking.
 
 | Prop | Type | Default | Required |
@@ -514,11 +514,11 @@ Canonical modal shell, built on native `<dialog>` with `showModal()` for top-lay
 <Dialog open={open} onClose={close} title="Edit client" maxWidth="lg">{form}</Dialog>
 ```
 
-**Use this when:** any feature modal — wrap, don't fork.
+**Use this when:** any feature modal, wrap, don't fork.
 **Don't use when:** simple yes/no confirm (→ `ConfirmDialog`).
 **Use instead of:** building modals from Radix Dialog directly or rolling your own portal.
 
-### ConfirmDialog — `confirm-dialog.tsx`
+### ConfirmDialog, `confirm-dialog.tsx`
 Yes/no confirm built on `Dialog`. Ships with a `useConfirm()` hook returning a `Promise<boolean>`.
 
 | Prop | Type | Default | Required |
@@ -542,7 +542,7 @@ return dialog; // render once at the page root
 **Use this when:** destructive or two-state confirmation.
 **Use instead of:** custom inline confirm modals, `window.confirm`.
 
-### DropdownMenu — `dropdown-menu.tsx`
+### DropdownMenu, `dropdown-menu.tsx`
 Radix DropdownMenu re-export with token theming. Sub-exports: `DropdownMenuTrigger`, `DropdownMenuContent`, `DropdownMenuItem`, `DropdownMenuCheckboxItem`, `DropdownMenuRadioGroup/Item`, `DropdownMenuLabel`, `DropdownMenuSeparator`, `DropdownMenuShortcut`, `DropdownMenuSub/SubTrigger/SubContent`, `DropdownMenuPortal`, `DropdownMenuGroup`.
 
 Inherits all Radix `DropdownMenuPrimitive.Root` props.
@@ -560,7 +560,7 @@ Inherits all Radix `DropdownMenuPrimitive.Root` props.
 **Use this when:** click-to-open action menus (row actions, header overflow).
 **Don't use when:** right-click contextual menu (→ `ContextMenu`).
 
-### ContextMenu — `context-menu.tsx`
+### ContextMenu, `context-menu.tsx`
 Radix ContextMenu re-export with token theming. Same shape as `DropdownMenu` but triggered by right-click.
 
 Inherits all Radix `ContextMenuPrimitive.Root` props.
@@ -574,7 +574,7 @@ Inherits all Radix `ContextMenuPrimitive.Root` props.
 </ContextMenu>
 ```
 
-### Popover — `popover.tsx`
+### Popover, `popover.tsx`
 Radix Popover with token theming. Critical: set `disablePortal` when nesting inside a native `<dialog>`.
 
 | Prop | Type | Default | Required |
@@ -593,7 +593,7 @@ Plus all Radix `PopoverPrimitive.Root` props.
 
 **Notes:** inside `Dialog`, pass `disablePortal` to avoid stacking-context issues.
 
-### Tooltip — `tooltip.tsx`
+### Tooltip, `tooltip.tsx`
 Radix Tooltip with token theming. Default delay 150ms.
 
 Inherits all Radix `TooltipPrimitive.Root` props. Sub-exports: `TooltipTrigger`, `TooltipContent`, `TooltipProvider`.
@@ -608,7 +608,7 @@ Inherits all Radix `TooltipPrimitive.Root` props. Sub-exports: `TooltipTrigger`,
 **Use this when:** short hint, single-line, no structured content.
 **Don't use when:** structured content with title + body (→ `TooltipCard`).
 
-### TooltipCard — `tooltip-card.tsx`
+### TooltipCard, `tooltip-card.tsx`
 Larger tooltip with structured title + description. 200ms delay, portaled to body, 300px wide.
 
 | Prop | Type | Default | Required |
@@ -631,7 +631,7 @@ Larger tooltip with structured title + description. 200ms delay, portaled to bod
 
 ## Data display
 
-### Table — `table.tsx`
+### Table, `table.tsx`
 Semantic table primitive with variant-aware shells. Exports `Table`, `TableHeader`, `TableBody`, `TableFooter`, `TableHead`, `TableRow`, `TableCell`, `TableCaption`.
 
 `Table`:
@@ -679,6 +679,6 @@ Plus all `<table>` HTML attrs.
 
 ## Out of scope (flagged in `FOUNDATION_AUDIT.md`, not built)
 
-- No `FeatureModal` shell over `Dialog` yet — feature modals compose `Dialog` directly.
-- No `DataTable` over `Table` yet — sort/pagination/selection are caller-owned.
+- No `FeatureModal` shell over `Dialog` yet, feature modals compose `Dialog` directly.
+- No `DataTable` over `Table` yet, sort/pagination/selection are caller-owned.
 - No mass-migration of inline `<EmptyState />` rolls; existing shared component lives at `components/shared/empty-state.tsx`.

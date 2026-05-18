@@ -49,7 +49,7 @@ The directory is already the single source of truth. No Button/Input/Modal dupli
 | `time-picker-15.tsx` | 15-minute interval time picker | Scheduler | |
 | `toggle.tsx` | Radix-based radio-like button | Filters | |
 | `tooltip.tsx` | Radix Tooltip (small, inline) | Icon buttons | **Canonical** for short tooltips. |
-| `tooltip-card.tsx` | Larger card-style tooltip with structured content | Data viz, table cells | **Intentional variant** of `tooltip.tsx` — different content density. |
+| `tooltip-card.tsx` | Larger card-style tooltip with structured content | Data viz, table cells | **Intentional variant** of `tooltip.tsx`, different content density. |
 
 ### Composed (reusable shells, ~10 files)
 
@@ -60,7 +60,7 @@ The directory is already the single source of truth. No Button/Input/Modal dupli
 | `components/layout/footer.tsx` | Footer chrome |
 | `components/admin/section-tabs.tsx` | Admin secondary tabs |
 | `components/shared/breadcrumbs.tsx` | Breadcrumb trail |
-| `components/shared/empty-state.tsx` | Reusable empty state (used ~6 places — under-adopted) |
+| `components/shared/empty-state.tsx` | Reusable empty state (used ~6 places, under-adopted) |
 | `components/shared/page-error.tsx` | Reusable error state (~13 places) |
 | `components/shared/stat-card.tsx` | Single-metric tile |
 | `components/portal/brand-switcher.tsx` | Multi-brand client switcher |
@@ -87,9 +87,9 @@ Rough counts only. Each feature folder owns its own modals, cards, tables, and f
 
 None of the primitives are accidental duplicates. The variant pairs/triads are deliberate:
 
-- `tooltip.tsx` vs `tooltip-card.tsx` — different content density.
-- `button.tsx` vs `glass-button.tsx` vs `glow-button.tsx` — different visual registers (utility, marketing, hero CTA).
-- `dialog.tsx` (Radix shell) vs `confirm-dialog.tsx` (yes/no composition) — composed primitive, not a duplicate.
+- `tooltip.tsx` vs `tooltip-card.tsx`, different content density.
+- `button.tsx` vs `glass-button.tsx` vs `glow-button.tsx`, different visual registers (utility, marketing, hero CTA).
+- `dialog.tsx` (Radix shell) vs `confirm-dialog.tsx` (yes/no composition), composed primitive, not a duplicate.
 
 The feature layer has potential merges (see inconsistency #2 and #3 below) but **no action is recommended in this rebuild**; flagged for a future pass.
 
@@ -105,7 +105,7 @@ Categorized rough breakdown:
 
 - **Brand-mode carveouts** (Anderson colors like `bg-[#36D1C2]`, `text-[#1F9489]`): high count, intentional, but should ideally route through `--accent` once the brand-mode override is fully respected by all surfaces.
 - **Platform tints** (`bg-[#4285F4]` for Google, `bg-[#363636]` for Instagram mockup, `text-[#FF4D67]` for TikTok): tokenized via `--platform-*` CSS variables but only partially adopted in the React layer.
-- **User-supplied hex** (moodboard tags, brand DNA color pickers, audit PDFs): legitimate — colors come from user data, must remain raw.
+- **User-supplied hex** (moodboard tags, brand DNA color pickers, audit PDFs): legitimate, colors come from user data, must remain raw.
 - **Pixel-perfect one-offs** (`top-[13px]`, `w-[42px]`): these are the real drift. Estimated low hundreds but not separately counted in this pass.
 
 **Recommendation:** flag in CLAUDE.md as a Hard rule; surface to rules-reviewer agent in Phase 5; do not retrofit existing code in this rebuild.
@@ -154,7 +154,7 @@ Sampled five admin/portal pages. Loading state coverage is the weakest dimension
 
 Many admin routes don't need org scoping (single-tenant admin context). But some user-mutation routes are missing it:
 
-- `app/api/analysis/edges/[id]` (PUT/DELETE) — validates auth, no org check. A user with a valid session can mutate any edge by UUID.
+- `app/api/analysis/edges/[id]` (PUT/DELETE), validates auth, no org check. A user with a valid session can mutate any edge by UUID.
 
 **Flagged. Not fixed in this rebuild.** Real fix is a separate dedicated security pass.
 
@@ -291,7 +291,7 @@ Current file: 170 lines, 16 top-level sections. Bucketed per the Phase-4 plan (u
 | Marketing Skills | **DELETE** | Skill metadata loads automatically; CLAUDE.md should not narrate the skill system |
 | Working Preferences (em-dash ban) | **KEEP** in Hard rules | Load-bearing |
 | Working Preferences (plans always approved) | **KEEP** in Hard rules | Load-bearing |
-| Working Preferences (run the commands) | **KEEP** as one line in Hard rules | "Run commands yourself, don't tell the user to" — one bullet |
+| Working Preferences (run the commands) | **KEEP** as one line in Hard rules | "Run commands yourself, don't tell the user to", one bullet |
 | Working Preferences (secrets in chat fine) | **DELETE** | Niche, low-frequency; relocate to a future `OPERATIONS.md` only if needed |
 | Working Preferences (push-notify on remote control) | **DELETE** | Per user decision |
 | Working Preferences (skim-first replies) | **DELETE** | Tone/style; verbose; relocate to future doc only if needed |
@@ -327,7 +327,7 @@ Target: 150-180 lines. Net change from current 170: roughly flat by line count, 
 
 For each: a state coverage matrix. "missing" = the state isn't handled at all (page silently breaks, or there's no UI for it). "n/a" = the state genuinely doesn't apply (no list = no empty state).
 
-### 5.1 Admin Clients List — `app/admin/clients/page.tsx`
+### 5.1 Admin Clients List, `app/admin/clients/page.tsx`
 
 | State | Status |
 |---|---|
@@ -340,18 +340,18 @@ For each: a state coverage matrix. "missing" = the state isn't handled at all (p
 
 Strongest example. Use as template.
 
-### 5.2 Admin Users List — `app/admin/users/page.tsx`
+### 5.2 Admin Users List, `app/admin/users/page.tsx`
 
 | State | Status |
 |---|---|
 | Loading | yes (state boolean + conditional render) |
-| Empty | **missing** — no message when zero users |
+| Empty | **missing**, no message when zero users |
 | Error | partial (toast only, no page state) |
 | Permission-denied | **missing at page level** (API enforces, but page renders empty shell) |
 | Mobile | yes |
 | Single vs many | n/a (list only) |
 
-### 5.3 Admin Dashboard — `app/admin/dashboard/page.tsx`
+### 5.3 Admin Dashboard, `app/admin/dashboard/page.tsx`
 
 | State | Status |
 |---|---|
@@ -362,7 +362,7 @@ Strongest example. Use as template.
 | Mobile | yes (`sm:`, `lg:` grid breakpoints) |
 | Single vs many | n/a |
 
-### 5.4 Portal Analytics — `app/portal/analytics/page.tsx`
+### 5.4 Portal Analytics, `app/portal/analytics/page.tsx`
 
 | State | Status |
 |---|---|
@@ -373,7 +373,7 @@ Strongest example. Use as template.
 | Mobile | yes (`lg:grid-cols-2`) |
 | Single vs many | yes (card mapping) |
 
-### 5.5 Portal Formats List — `app/portal/research/formats/page.tsx`
+### 5.5 Portal Formats List, `app/portal/research/formats/page.tsx`
 
 | State | Status |
 |---|---|
@@ -388,7 +388,7 @@ Strongest example. Use as template.
 
 Most common missing states across the sample:
 1. **Loading** (3 of 5 missing)
-2. **Error** at page level (3 of 5 missing — toast-only or unhandled)
+2. **Error** at page level (3 of 5 missing, toast-only or unhandled)
 3. **Empty using `<EmptyState />` primitive** (most pages roll their own when present at all)
 
 This shapes the CLAUDE.md Hard rule "Edge cases up front: loading, empty, error, permission-denied, mobile, 0/1/many" and the rules-reviewer agent's checks on any new page.
