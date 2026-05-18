@@ -11,6 +11,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "verify": "npm run lint && npx tsc --noEmit && npm run build",
     "docs:api": "tsx scripts/generate-api-docs.ts",
     "test": "vitest run -c app/vitest.config.ts",
     "test:watch": "vitest -c app/vitest.config.ts",
