@@ -1,170 +1,77 @@
 # CLAUDE.md
 
-## Project Overview
+## What this app is
 
-**Nativz Cortex**, dual-dashboard AI-powered topic research and content ideation platform for the Nativz marketing agency. Admin dashboard for the team + client portal for clients. Core problem: videographers show up on set without knowing what to film. This tool runs AI-powered topic research so they have trending topics and video ideas ready.
+Nativz Cortex is a dual-dashboard SaaS for the Nativz social media marketing agency. The admin dashboard is the internal team's workflow hub; the portal is the client-facing view. The core problem is that videographers show up on set without knowing what to film, so Cortex runs AI-powered topic research, format ideation, and content scheduling so they have trending topics and video ideas ready. Cortex is for **short-form video only** (TikTok, Reels, Shorts). Never reference long-form in user-facing copy.
 
-## Tech Stack
+## Stack
 
-Next.js 15 (App Router) + TypeScript, Supabase (Postgres + Auth + pgvector), SearXNG (self-hosted), Claude Sonnet 4.5 via OpenRouter, Tailwind CSS v4, Recharts, lucide-react, Zod, Obsidian vault via GitHub API, Zernio (social posting), Stripe (billing).
+- Framework: Next.js 15 (App Router) · TypeScript
+- Styling: Tailwind v4 (inline `@theme` in `app/globals.css`, no `tailwind.config.js`)
+- Data: Supabase (Postgres + Auth + pgvector + RLS)
+- AI: Claude Sonnet 4.5 via OpenRouter
+- Search: SearXNG (self-hosted, Mac mini)
+- Posting: Zernio
+- Billing: Stripe
+- Hosting: Vercel (`cortex.nativz.io`); Supabase project ref `phypsgxszrvwdaaqpxup`
+- Package manager: npm
+- Tests: Vitest (unit) · Playwright (e2e)
 
-## Daily Commands
+## Hard rules
 
-```bash
-npm run dev          # Dev server (Cortex on http://localhost:3001)
-npm run build        # Production build
-npm run lint         # ESLint
-npx tsc --noEmit     # Type-check
-npm run test:e2e     # Playwright matrix
-```
+1. **No em dashes.** Anywhere. U+2014 (em dash) and U+2013 (en dash) are banned in code, copy, commit messages, chat, markdown, comments. Use commas, periods, colons, parentheses, or a regular hyphen `-`. Date ranges read "Jan 1 to Jan 7", not "Jan 1 to 7" with a fancy dash. Audit your output before sending.
+2. **No new primitive components.** Always import from `@/components/ui`. Run `ls components/ui` and grep `components/ui/COMPONENTS.md` before writing any new UI file. If a primitive almost fits, extend its variants rather than forking.
+3. **No arbitrary Tailwind values.** No `p-[13px]`, no `text-[#abc]`, no raw palette colors (`bg-slate-900`, `text-gray-400`). Use semantic tokens documented in `DESIGN_SYSTEM.md`. Carve-outs (user-supplied hex, brand-mode overrides) must be deliberate and obvious from context.
+4. **Reuse before build.** Before any UI work, check `components/ui/COMPONENTS.md` and `DESIGN_SYSTEM.md`. Before any feature work, check the closest sibling page (admin or portal) for an existing pattern.
+5. **Enumerate edge cases up front.** Before implementing any feature: loading, empty, error, permission-denied, mobile, 0/1/many items. Use `<Skeleton />`, `<EmptyState />`, `<PageError />` primitives, not ad-hoc divs.
+6. **Portal routes scope by `organization_id`.** Every API route a portal user (role `viewer`) can hit must filter by org. Use `getPortalClient()` (from `lib/portal/get-portal-client.ts`) in portal pages. `createAdminClient()` bypasses RLS - if you use it, manually scope every query. Prefer `createServerSupabaseClient()` for portal-facing routes.
+7. **API routes: Zod + auth + null-safe.** Zod input validation, `supabase.auth.getUser()`, null-safe AI response fields (`?? []`, `?? ''`, `?? 0`), `NextResponse.json()`, proper HTTP status codes. See `.claude/rules/api-routes.md`. Dynamic params are `params: Promise<{ id: string }>` - must `await params`.
+8. **Sentence case** in product UI. Title Case is reserved for the admin sidebar nav (documented exception) and document/file headings.
+9. **Charts are `'use client'`.** Recharts components must live in client components.
+10. **Plans are approved on output.** Don't ask "is this plan good?". Plan mode is required for features touching more than two files; once you exit plan mode, build it.
+11. **Run the commands yourself.** Don't tell the user "here's what to run." Run typecheck, lint, migrations, seeds, tests yourself. Exceptions: browser-only auth, dashboard clicks, deploys from their account.
+12. **Run `npm run verify` before declaring done.** Verify wraps `lint + tsc --noEmit + build`. If it fails, fix and re-run - don't ship a broken build.
+13. **Run until ship-ready, not just code-ready.** Before reporting done: builds clean, types pass, visually consistent with sibling screens (tokens, spacing, primitives, loading/error states). If the new screen looks like it came from a different app, it isn't done.
 
-Long-tail scripts (ads, kandy, migrations, e2e variants): see `docs/commands.md`.
+## Workflow
 
-## Reference Docs
+Spec (when one exists in `tasks/` or `docs/`) → plan (plan mode for >2-file changes) → build (parallel reads, dedicated tools over Bash) → review (read changed files, optionally spawn the `rules-reviewer` agent on the diff) → verify (`npm run verify`) → commit on the working branch. Subagents are for context isolation, parallel research, or bulk mechanical work; pick the cheapest tier that can do the task. Use Supabase MCP for schema/RLS/migration tasks before guessing.
 
-Full doc index lives in `docs/`. Read on-demand based on the task:
+## File map
 
-- Architecture / routes / auth → `docs/architecture.md`
-- DB schema, RLS, semantic memory layer → `docs/database.md`
-- API patterns / route inventory → `docs/api-patterns.md` + `docs/api-reference.md`
-- UI/copy/data conventions → `docs/conventions.md`
-- UI micro-interaction patterns → `docs/detail-design-patterns.md`
-- Topic search pipeline (SearXNG/OpenAI/OpenRouter, env vars) → `docs/topic-search.md`
-- Zernio setup + webhook secret + notify env → `docs/zernio-setup.md`
-- Revenue Hub + Stripe + Proposals → `docs/revenue.md`
-- **Email style guide (REQUIRED before authoring any sender) → `docs/email-style.md`**
-- Vercel build-cache flag → `docs/vercel-build.md`
-- Specs → `docs/spec-*.md`, `docs/MOODBOARD_PRD.md`
-- Latest pass-off after a long break → newest `docs/session-passoff-*.md`
+- `app/admin/*` - admin dashboard pages (Nativz team)
+- `app/portal/*` - client portal pages (scoped by `organization_id`)
+- `app/(app)/*` - shared logged-in surfaces (results, scheduler, audit)
+- `app/api/*` - API routes (618 currently; Zod + auth + org-scope per rule 6/7)
+- `app/auth/*`, `app/login`, `app/forgot-password`, `app/reset-password`, `app/join` - auth flows
+- `app/present`, `app/p`, `app/c`, `app/r`, `app/s` - public share surfaces
+- `app/onboarding`, `app/connect`, `app/comptroller` - onboarding, integration, financial
+- `components/ui/*` - primitives (single source of truth; see `COMPONENTS.md`)
+- `components/{layout,shared,admin,portal,...}/*` - composed + feature components by domain
+- `lib/*` - utilities, auth helpers (`get-portal-client.ts`, admin/server client factories)
+- `supabase/migrations/*` - SQL migrations (applied via `npm run supabase:migrate`)
+- `docs/*` - reference docs (see Pointers)
+- `scripts/*` - tooling (ads, kandy, seeds, migrations, audits)
+- `tests/*` - Playwright e2e (auth crawls, redirects, security, smoke)
+- `tasks/*` - feature specs to build from without asking
+- `.claude/*` - agent harness config (hooks, agents, rules, skills)
 
-## Session Startup
+## Pointers
 
-1. **Check Linear.** The `SessionStart` hook runs `scripts/linear-todos.sh` and injects open issues assigned to Jack. If the list is non-empty, your *first* response asks which issue to work on (grouped by priority). Don't pick one unilaterally; don't start until Jack picks. If empty, proceed normally.
-2. Run `git status`, if dirty, ask whether to commit, stash, or discard before starting new work.
-3. Read `todo.md` for current status / priorities.
-4. Reference `docs/detail-design-patterns.md` when implementing any UI component.
-
-## Supabase MCP
-
-When working on **schema, SQL, migrations, RLS, or Supabase dashboard-style DB tasks**, **prefer the Supabase MCP** (read tables, run read-safe SQL, docs) over guessing. Fall back to `docs/database.md` and `supabase/migrations/` when MCP is unavailable. Setup details: project ref `phypsgxszrvwdaaqpxup`; MCP install + auth steps in `docs/supabase-mcp.md` (one-time).
-
-## Marketing Skills
-
-For any marketing/CRO/copy/SEO/growth task, read `.agents/MARKETING-SKILLS.md` and the relevant `SKILL.md` first. Use `product-marketing-context` when product positioning matters.
-
-## Working Preferences
-
-- **NEVER USE EM DASHES.** Not in emails, not in UI copy, not in code comments, not in commit messages, not in chat replies, not in markdown docs. Anywhere. The em dash character (U+2014) and its en-dash sibling (U+2013) are banned. Use commas, periods, colons, parentheses, or a regular hyphen `-` instead. This is a hard rule. Audit your output before sending. If you catch yourself typing one, rewrite the sentence. Same goes for any code or copy you generate. Date ranges should read "Jan 1 to Jan 7", not "Jan 1 to 7" with a fancy dash.
-- **Plans are always approved.** Proceed with implementation without asking for permission.
-- **Don't ask "is this plan good?"** Just build it.
-- **Run the commands.** Whenever you would tell the user to run a terminal command (scripts, seeds, migrations, tests, typecheck, lint), run it yourself. Don't stop at "here's what to run." Exceptions: steps that truly require the user (browser-only auth, dashboard clicks, deploying from their account); say so briefly, but still run everything that can run here.
-- **Secrets in chat are fine.** Do not add disclaimers or "don't paste secrets" warnings unless explicitly asked for a security review. (`.env.local` stays gitignored.)
-- **Always push-notify when Remote Control is on.** Whenever the session is being driven via Remote Control (i.e. Jack is on his phone), fire a `PushNotification` any time you stop and need a decision, hit a blocker, or finish a task and are awaiting next steps. Don't just print a question to the chat and idle, he won't see it until he opens the laptop. The notification body should be short and tell him what's needed (e.g. "FB investigation queued, picking next step" or "build failed: 2 auth tests"). If the push tool reports it wasn't sent, that's expected.
-- **Skim-first replies.** Jack scans, doesn't read. When you need a decision from him, lead with a one-line TL;DR, then the *minimum* set of choices as short bullets (label + 5-15 word gloss + your default). No multi-paragraph option write-ups, no "I lean…" paragraphs, no recapping his own request back to him. End with a single "Pick X or tell me to swap Y" line. If a question can be answered by your own default, just build it instead of asking. Long-form analysis is opt-in only ("expand on #2" gets the depth).
-- **Run until ship-ready, not just code-ready.** When building or modifying any feature, keep working autonomously until it is ready to ship *and* visually + experientially consistent with the rest of the site. This is required, not a recommendation. Before reporting done, verify: (1) builds clean + types pass, (2) the new surface matches existing screens, same typography, spacing, component primitives (`bg-surface` cards, `accent-text`, button styles), dark theme tokens, sentence-case copy, layout density, loading/error states. **If the new screen looks like it came from a different app, it isn't done.** Pull patterns from existing screens before inventing new ones; reference `docs/detail-design-patterns.md` and the closest sibling page in the same area (`/admin/...` or `/portal/...`).
-- **Completion messages follow this style.** When wrapping up a task, end with a short three-part recap, plain English, no jargon dumps:
-
-  ```
-  Here's what we did:
-
-  - item 1
-  - item 2
-
-  It's committed at <sha> on main. (or: It's not committed.)
-
-  Logical next steps would be to XYZ.
-  ```
-
-  Bullets are one-liners a non-engineer could parse. If something deserves more depth, hint at it ("happy to expand on the webhook fallback") rather than dumping the detail unprompted. Skip the next-steps line if there genuinely isn't one; never invent busywork to fill it.
-
-## Key Conventions
-
-- API routes: Zod validation + auth check before processing
-- Next.js 15 params: `params: Promise<{ id: string }>` (must `await params`)
-- UI: dark theme, `bg-surface` cards on `bg-background`, blue accent (`accent-text`)
-- Copy: **sentence case** in product UI (admin sidebar nav is the documented exception, Title Case there). Doc/file headings use Title Case.
-- AI responses: always null-safe (`?? []`, `?? ''`, `?? 0`)
-- Admin: `createAdminClient()` (service role); Portal: scope by `organization_id`
-- Charts: always `'use client'`
-- Full list: `docs/conventions.md`
-
-## Task Delegation
-
-Spawn subagents to isolate context, parallelize independent work, or offload bulk mechanical tasks. Don't spawn when the parent needs the reasoning, when synthesis requires holding things together, or when spawn overhead dominates.
-
-Pick the cheapest model that can do the subtask well:
-- Haiku: bulk mechanical work, no judgment
-- Sonnet: scoped research, code exploration, in-scope synthesis
-- Opus: subtasks needing real planning or tradeoffs
-
-Subagents follow the same rules recursively, with two caps:
-- Haiku does not spawn further subagents. If it needs to, the task was wrong-sized for Haiku, return to the parent.
-- Max 3 tiers total (parent → subagent → one further tier). No nesting beyond that.
-
-Don't escalate tiers without a concrete reason. If a subagent realizes it needs a higher tier than itself, return to the parent rather than spawning up.
-
-Parent owns final output and cross-spawn synthesis. User instructions override.
-
-## Preferred Tools
-
-### Data Fetching
-
-1. **WebFetch**, free, text-only, works on public pages that don't block bots.
-2. **agent-browser CLI** (when installed, check with `which agent-browser`), local Rust CLI + Chrome via CDP. For dynamic pages or auth walls. Returns accessibility tree with element refs, ~82% fewer tokens than screenshot tools. Install: `npm i -g agent-browser && agent-browser install`. If not installed, fall back to a Chrome MCP / Playwright tool.
-3. **Notice recurring fetch patterns and propose wrapping them as dedicated tools.** When the same fetch/parse logic comes up more than once, suggest wrapping it as a named tool (e.g. a skill file or a `.py` script that calls `agent-browser` with the snapshot and extraction steps baked in). Reference it by name on future calls.
-
-### PDF Files
-
-Use `pdftotext`, not the `Read` tool. Use `Read` only when the user directly asks to analyze images or charts inside the document.
-
-## Large Data Files (skip unless directly relevant)
-
-- `app/admin/nerd/api/api-docs-data.ts` + `docs/api-reference.md`, both auto-generated from `app/api/**/route.ts` by `scripts/generate-api-docs.ts`. Do not edit by hand. Run `npm run docs:api` after adding/removing routes or tweaking the JSDoc block above an exported HTTP method.
-
-## Portal Security (CRITICAL)
-
-**Every API route that a portal user (role=`viewer`) can hit MUST scope data by `organization_id`.**
-
-- Portal users are scoped via `user_client_access` table → `organization_id`
-- Use `getPortalClient()` (from `lib/portal/get-portal-client.ts`) in portal pages to get the user's client + org
-- API routes: check `users.organization_id` and filter results accordingly. Never return unscoped data to non-admin users.
-- `createAdminClient()` bypasses RLS, if using it, you MUST manually enforce org scoping in the query
-- `createServerSupabaseClient()` respects RLS, prefer this for portal-facing routes when possible
-- Supabase RLS is enabled on all tables with admin + viewer policies. The `topic_searches` table has org-scoped RLS.
-
-**Pattern for API route scoping:**
-```typescript
-const { data: userData } = await adminClient
-  .from('users')
-  .select('role, organization_id')
-  .eq('id', user.id)
-  .single();
-
-const isAdmin = userData?.role === 'admin';
-if (!isAdmin) {
-  query = query.eq('clients.organization_id', userData.organization_id);
-}
-```
-
-## Roles
-
-| Role | Access | Scoping |
-|------|--------|---------|
-| `admin` / `super_admin` | Full admin dashboard, all clients | No org filter |
-| `viewer` | Portal only, research + settings | Scoped to their `organization_id` |
-
-## Short-form Video Focus
-
-Cortex is exclusively for **short-form video content** (TikTok, Reels, Shorts). All topic search results, video analysis, content ideas, and scripting assume short-form vertical video. Never reference long-form content in user-facing copy.
-
-## Current Deploy
-
-Vercel at `cortex.nativz.io` · Supabase project `phypsgxszrvwdaaqpxup` · SearXNG on `localhost:8888` (Mac mini, not in production) · ReClip on `localhost:8899` (video downloader, Mac mini).
-
-## Task Specs
-
-For complex features, check the `tasks/` directory for detailed specs. Build from specs without asking for confirmation.
-
-## Long-running sessions
-
-Auto-compaction is configured (threshold lowered to 80% per `490221a4`). You can run multi-phase, multi-day phased builds continuously without worrying about the context window, old turns are summarized as needed. When Jack approves a multi-phase plan ("continue on phase 1-4 until you're done"), execute every phase end-to-end with the verify gates per phase (typecheck + lint + dev visual + `/audit` + commit), pausing only for genuine blockers (missing creds, browser-only auth, destructive ops). No "stopping for the night" prompts; no "should I continue?", just keep shipping.
+- [`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md) - short token + scale reference. Read before any UI work.
+- [`components/ui/COMPONENTS.md`](components/ui/COMPONENTS.md) - primitive catalog with props + usage. Read before adding any component.
+- [`FOUNDATION_AUDIT.md`](FOUNDATION_AUDIT.md) - inventory + flagged future consolidation work.
+- [`docs/architecture.md`](docs/architecture.md) - App Router layout, route groups, auth.
+- [`docs/database.md`](docs/database.md) - Supabase schema, RLS policies, semantic memory layer.
+- [`docs/api-patterns.md`](docs/api-patterns.md) - HTTP conventions, route inventory.
+- [`docs/conventions.md`](docs/conventions.md) - full UI/copy/data conventions (extends rule 8).
+- [`docs/detail-design-patterns.md`](docs/detail-design-patterns.md) - micro-interaction patterns (motion, focus, hover).
+- [`docs/design-tokens.md`](docs/design-tokens.md) - canonical token reference (every brand-mode override, every carve-out).
+- [`docs/topic-search.md`](docs/topic-search.md) - SearXNG + OpenRouter pipeline, env vars.
+- [`docs/email-style.md`](docs/email-style.md) - required before authoring any email sender.
+- [`docs/zernio-setup.md`](docs/zernio-setup.md) - Zernio webhook, notify env.
+- [`docs/revenue.md`](docs/revenue.md) - Revenue Hub, Stripe, proposals.
+- [`docs/supabase-mcp.md`](docs/supabase-mcp.md) - MCP install + auth (one-time).
+- [`docs/commands.md`](docs/commands.md) - long-tail scripts.
+- [`.claude/rules/api-routes.md`](.claude/rules/api-routes.md) - API route validation + auth + scoping rules.
+- [`.claude/agents/rules-reviewer.md`](.claude/agents/rules-reviewer.md) - strict diff-vs-rules reviewer (PASS or numbered violations).
